@@ -15,12 +15,12 @@ use crate::{
 pub struct RequestPlanEvent(pub(crate) Entity);
 
 pub fn request_plan_event_handler_system(
-    mut ev_levelup: EventReader<RequestPlanEvent>,
+    mut ev_request_plan: EventReader<RequestPlanEvent>,
     mut actors: Query<&mut Actor>,
     mut action_states: Query<&mut ActionState>,
     actions: Query<&Action>,
 ) {
-    for ev in ev_levelup.iter() {
+    for ev in ev_request_plan.iter() {
         println!("Plan requested for {:?}", ev.0);
 
         if let Ok(mut actor) = actors.get_mut(ev.0) {
