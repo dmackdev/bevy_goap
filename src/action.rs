@@ -15,6 +15,7 @@ pub enum ActionState {
 pub struct Action {
     actor_entity: Entity,
     pub(crate) preconditions: HashMap<TypeId, bool>,
+    pub(crate) postconditions: HashMap<TypeId, bool>,
 }
 
 impl Action {
@@ -22,6 +23,7 @@ impl Action {
         ActionBuilder {
             marker_component: Arc::new(marker_component),
             preconditions: HashMap::new(),
+            postconditions: HashMap::new(),
         }
     }
 }
@@ -30,6 +32,7 @@ impl Action {
 pub struct ActionBuilder {
     marker_component: Arc<dyn MarkerComponent>,
     preconditions: HashMap<TypeId, bool>,
+    postconditions: HashMap<TypeId, bool>,
 }
 
 impl ActionBuilder {
@@ -39,6 +42,15 @@ impl ActionBuilder {
         value: bool,
     ) -> ActionBuilder {
         self.preconditions.insert(TypeId::of::<T>(), value);
+        self
+    }
+
+    pub fn with_postcondition<T: Condition + 'static>(
+        mut self,
+        _postcondition: T,
+        value: bool,
+    ) -> ActionBuilder {
+        self.postconditions.insert(TypeId::of::<T>(), value);
         self
     }
 }
@@ -54,6 +66,7 @@ impl BuildAction for ActionBuilder {
             .insert(Action {
                 actor_entity,
                 preconditions: self.preconditions.clone(),
+                postconditions: self.postconditions.clone(),
             })
             .insert(ActionState::Idle)
             .id();

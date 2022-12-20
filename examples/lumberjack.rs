@@ -6,35 +6,32 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(GoapPlugin)
         .add_startup_system(create_lumberjack)
-        .add_system(find_axe_action_system)
-        .add_system(move_to_tree_action_system)
+        .add_system(get_axe_action_system)
+        .add_system(chop_tree_action_system)
+        .add_system(collect_wood_action_system)
         .run();
 }
 
 fn create_lumberjack(mut commands: Commands) {
-    // Considering actions local to actor for the moment
+    // Considering only actions with conditions that are local to the actor (and not world) for the moment.
 
-    // Preconditions: actor does not have axe
-    // Postconditions: actor has axe
-    let get_axe_action = Action::build(GetAxeAction).with_precondition(ActorHasAxeCondition, false);
+    let get_axe_action = Action::build(GetAxeAction)
+        .with_precondition(ActorHasAxeCondition, false)
+        .with_postcondition(ActorHasAxeCondition, true);
 
-    // Preconditions: actor has axe
-    // Postconditions: actor has wood
-    let chop_tree_action =
-        Action::build(ChopTreeAction).with_precondition(ActorHasAxeCondition, true);
+    let chop_tree_action = Action::build(ChopTreeAction)
+        .with_precondition(ActorHasAxeCondition, true)
+        .with_postcondition(ActorHasWoodCondition, true);
 
-    // Preconditions: actor does not have wood
-    // Postconditions: actor has wood
-    let collect_wood_action =
-        Action::build(CollectWoodAction).with_precondition(ActorHasWoodCondition, false);
+    let collect_wood_action = Action::build(CollectWoodAction)
+        .with_precondition(ActorHasWoodCondition, false)
+        .with_postcondition(ActorHasWoodCondition, true);
 
-    // Possible paths:
-    // 1: GetAxeAction -> ChopTreeAction
-    // 2: GetAxeAction -> CollectWoodAction (next lowest cost if axe and wood are both already available)
-    // 3: CollectWoodAction (lowest cost if wood is already available)
-
-    // Goal: actor has wood
+    // Try toggling the initial conditions to observe the different actions the lumberjack takes!
     let lumberjack = Actor::build(Lumberjack)
+        .with_initial_condition(ActorHasAxeCondition, false)
+        .with_initial_condition(ActorHasWoodCondition, false)
+        .with_goal(ActorHasWoodCondition, true)
         .with_action(get_axe_action)
         .with_action(chop_tree_action)
         .with_action(collect_wood_action);
@@ -48,17 +45,16 @@ struct Lumberjack;
 #[derive(Component, Clone)]
 struct GetAxeAction;
 
-fn find_axe_action_system(mut query: Query<&mut ActionState, With<GetAxeAction>>) {
+fn get_axe_action_system(mut query: Query<&mut ActionState, With<GetAxeAction>>) {
     for mut action_state in query.iter_mut() {
         match *action_state {
             ActionState::Executing => {
-                println!("Finding axe!");
-                println!("Found axe!");
+                println!("Getting axe!");
 
                 *action_state = ActionState::Complete;
             }
             ActionState::Complete => {
-                println!("FindAxeAction is Complete.");
+                println!("GetAxeAction is Complete.");
             }
             _ => {}
         };
@@ -71,12 +67,11 @@ impl Condition for ActorHasAxeCondition {}
 #[derive(Component, Clone)]
 struct ChopTreeAction;
 
-fn move_to_tree_action_system(mut query: Query<&mut ActionState, With<ChopTreeAction>>) {
+fn chop_tree_action_system(mut query: Query<&mut ActionState, With<ChopTreeAction>>) {
     for mut action_state in query.iter_mut() {
         match *action_state {
             ActionState::Executing => {
-                println!("Moving to tree!");
-                println!("Is at tree!");
+                println!("Chopping tree!");
 
                 *action_state = ActionState::Complete;
             }
@@ -90,6 +85,22 @@ fn move_to_tree_action_system(mut query: Query<&mut ActionState, With<ChopTreeAc
 
 #[derive(Component, Clone)]
 struct CollectWoodAction;
+
+fn collect_wood_action_system(mut query: Query<&mut ActionState, With<CollectWoodAction>>) {
+    for mut action_state in query.iter_mut() {
+        match *action_state {
+            ActionState::Executing => {
+                println!("Collecting wood!");
+
+                *action_state = ActionState::Complete;
+            }
+            ActionState::Complete => {
+                println!("CollectWoodAction is Complete.");
+            }
+            _ => {}
+        };
+    }
+}
 
 struct ActorHasWoodCondition;
 impl Condition for ActorHasWoodCondition {}
