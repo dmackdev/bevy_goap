@@ -1,7 +1,7 @@
 use bevy::prelude::Plugin;
 use bevy_inspector_egui::{Inspectable, RegisterInspectable, WorldInspectorPlugin};
 
-use crate::Action;
+use crate::action::Action;
 
 pub struct GoapInspectorPlugin;
 
