@@ -25,6 +25,15 @@ impl Actor {
             initial_goal: HashMap::new(),
         }
     }
+
+    pub(crate) fn complete_action(
+        &mut self,
+        postconditions: HashMap<TypeId, bool>,
+    ) -> Option<&Entity> {
+        self.current_state.extend(postconditions);
+        self.current_path.pop_front();
+        self.current_path.front()
+    }
 }
 
 #[derive(Component)]

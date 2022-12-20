@@ -11,7 +11,7 @@ pub enum ActionState {
     Complete,
 }
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct Action {
     actor_entity: Entity,
     pub(crate) preconditions: HashMap<TypeId, bool>,
@@ -81,24 +81,22 @@ pub fn handle_completed_actions_system(
     mut actors: Query<&mut Actor>,
     mut query: Query<(&Action, &mut ActionState)>,
 ) {
-    let mut actor_entities_to_start_next_action = vec![];
+    let mut completed = vec![];
 
     for (action, mut action_state) in query.iter_mut() {
         if let ActionState::Complete = *action_state {
             *action_state = ActionState::Idle;
 
-            actor_entities_to_start_next_action.push(action.actor_entity);
+            completed.push((action.actor_entity, action.postconditions.clone()));
         };
     }
 
-    for actor_entity in actor_entities_to_start_next_action {
+    for (actor_entity, postconditions) in completed {
         let mut actor = actors.get_mut(actor_entity).unwrap();
 
-        actor.current_path.pop_front();
-
-        if let Some(action_entity) = actor.current_path.front() {
-            let (_, mut action_state) = query.get_mut(*action_entity).unwrap();
-            *action_state = ActionState::Executing;
+        if let Some(next_action_entity) = actor.complete_action(postconditions) {
+            let (_, mut next_action_state) = query.get_mut(*next_action_entity).unwrap();
+            *next_action_state = ActionState::Executing;
         }
     }
 }
