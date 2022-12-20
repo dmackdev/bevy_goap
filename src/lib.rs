@@ -22,20 +22,55 @@ pub struct Actor {
 }
 
 impl Actor {
-    pub fn build() -> ActorBuilder {
-        ActorBuilder { actions: vec![] }
+    pub fn build(marker_component: impl ActorMarkerComponent + 'static) -> ActorBuilder {
+        ActorBuilder {
+            marker_component: Arc::new(marker_component),
+            actions: vec![],
+        }
     }
 }
 
 #[derive(Component)]
 pub struct ActorBuilder {
+    marker_component: Arc<dyn ActorMarkerComponent>,
     actions: Vec<Arc<dyn ActionBuilder>>,
+}
+
+pub trait ActorMarkerComponent: Send + Sync {
+    fn build(&self, commands: &mut Commands, actor_entity: Entity);
+}
+
+impl<T> ActorMarkerComponent for T
+where
+    T: Component + Clone + Send + Sync,
+{
+    fn build(&self, commands: &mut Commands, actor_entity: Entity) {
+        commands.entity(actor_entity).insert(T::clone(self));
+    }
 }
 
 impl ActorBuilder {
     pub fn with_action(mut self, action: impl ActionBuilder + 'static) -> Self {
         self.actions.push(Arc::new(action));
         self
+    }
+
+    fn build(&self, commands: &mut Commands, actor_entity: Entity) {
+        let action_entities = self
+            .actions
+            .iter()
+            .map(|action_to_build| action_to_build.build(commands, actor_entity))
+            .collect();
+
+        commands
+            .entity(actor_entity)
+            .insert(Actor {
+                actions: action_entities,
+                current_path: VecDeque::new(),
+            })
+            .remove::<ActorBuilder>();
+
+        self.marker_component.build(commands, actor_entity);
     }
 }
 
@@ -45,16 +80,17 @@ struct Action {
 }
 
 pub trait ActionBuilder: Send + Sync {
-    fn build(&self, cmd: &mut Commands, actor_entity: Entity) -> Entity;
+    fn build(&self, commands: &mut Commands, actor_entity: Entity) -> Entity;
 }
 
 impl<T> ActionBuilder for T
 where
     T: Component + Clone + Send + Sync,
 {
-    fn build(&self, cmd: &mut Commands, actor_entity: Entity) -> Entity {
+    fn build(&self, commands: &mut Commands, actor_entity: Entity) -> Entity {
         let action_component = T::clone(self);
-        cmd.spawn_empty()
+        commands
+            .spawn_empty()
             .insert(action_component)
             .insert(Action { actor_entity })
             .insert(ActionState::Idle)
@@ -69,20 +105,9 @@ fn build_new_actor_system(
 ) {
     for (entity, actor_builder) in query.iter() {
         let actor_entity = commands.entity(entity).id();
-        let mut action_entities = vec![];
 
-        for action_to_build in actor_builder.actions.iter() {
-            let action_entity = action_to_build.build(&mut commands, actor_entity);
+        actor_builder.build(&mut commands, actor_entity);
 
-            action_entities.push(action_entity);
-        }
-
-        commands.entity(actor_entity).insert(Actor {
-            actions: action_entities,
-            current_path: VecDeque::new(),
-        });
-
-        commands.entity(entity).remove::<ActorBuilder>();
         ev_request_plan.send(RequestPlanEvent(actor_entity));
     }
 }

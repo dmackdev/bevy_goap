@@ -14,14 +14,14 @@ fn main() {
 }
 
 fn create_lumberjack(mut commands: Commands) {
-    commands.spawn_empty().insert(Lumberjack).insert(
-        Actor::build()
+    commands.spawn_empty().insert(
+        Actor::build(Lumberjack)
             .with_action(FindAxeAction)
             .with_action(MoveToTreeAction),
     );
 }
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 struct Lumberjack;
 
 #[derive(Component, Clone)]
