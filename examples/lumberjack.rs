@@ -12,15 +12,32 @@ fn main() {
 }
 
 fn create_lumberjack(mut commands: Commands) {
-    let find_axe_action =
-        Action::build(FindAxeAction).with_precondition(IsAxeAvailableCondition, true);
+    // Considering actions local to actor for the moment
 
-    let move_to_tree_action =
-        Action::build(MoveToTreeAction).with_precondition(IsTreeAvailableCondition, true);
+    // Preconditions: actor does not have axe
+    // Postconditions: actor has axe
+    let get_axe_action = Action::build(GetAxeAction).with_precondition(ActorHasAxeCondition, false);
 
+    // Preconditions: actor has axe
+    // Postconditions: actor has wood
+    let chop_tree_action =
+        Action::build(ChopTreeAction).with_precondition(ActorHasAxeCondition, true);
+
+    // Preconditions: actor does not have wood
+    // Postconditions: actor has wood
+    let collect_wood_action =
+        Action::build(CollectWoodAction).with_precondition(ActorHasWoodCondition, false);
+
+    // Possible paths:
+    // 1: GetAxeAction -> ChopTreeAction
+    // 2: GetAxeAction -> CollectWoodAction (next lowest cost if axe and wood are both already available)
+    // 3: CollectWoodAction (lowest cost if wood is already available)
+
+    // Goal: actor has wood
     let lumberjack = Actor::build(Lumberjack)
-        .with_action(find_axe_action)
-        .with_action(move_to_tree_action);
+        .with_action(get_axe_action)
+        .with_action(chop_tree_action)
+        .with_action(collect_wood_action);
 
     commands.spawn_empty().insert(lumberjack);
 }
@@ -29,9 +46,9 @@ fn create_lumberjack(mut commands: Commands) {
 struct Lumberjack;
 
 #[derive(Component, Clone)]
-struct FindAxeAction;
+struct GetAxeAction;
 
-fn find_axe_action_system(mut query: Query<&mut ActionState, With<FindAxeAction>>) {
+fn find_axe_action_system(mut query: Query<&mut ActionState, With<GetAxeAction>>) {
     for mut action_state in query.iter_mut() {
         match *action_state {
             ActionState::Executing => {
@@ -48,14 +65,13 @@ fn find_axe_action_system(mut query: Query<&mut ActionState, With<FindAxeAction>
     }
 }
 
-struct IsAxeAvailableCondition;
-
-impl Condition for IsAxeAvailableCondition {}
+struct ActorHasAxeCondition;
+impl Condition for ActorHasAxeCondition {}
 
 #[derive(Component, Clone)]
-struct MoveToTreeAction;
+struct ChopTreeAction;
 
-fn move_to_tree_action_system(mut query: Query<&mut ActionState, With<MoveToTreeAction>>) {
+fn move_to_tree_action_system(mut query: Query<&mut ActionState, With<ChopTreeAction>>) {
     for mut action_state in query.iter_mut() {
         match *action_state {
             ActionState::Executing => {
@@ -72,6 +88,8 @@ fn move_to_tree_action_system(mut query: Query<&mut ActionState, With<MoveToTree
     }
 }
 
-struct IsTreeAvailableCondition;
+#[derive(Component, Clone)]
+struct CollectWoodAction;
 
-impl Condition for IsTreeAvailableCondition {}
+struct ActorHasWoodCondition;
+impl Condition for ActorHasWoodCondition {}
