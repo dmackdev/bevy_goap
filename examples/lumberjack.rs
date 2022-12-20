@@ -1,11 +1,9 @@
 use bevy::prelude::*;
-use bevy_goap::{ActionState, Actor, GoapPlugin};
-use bevy_inspector_egui::WorldInspectorPlugin;
+use bevy_goap::{Action, ActionState, Actor, Condition, GoapPlugin};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(GoapPlugin)
         .add_startup_system(create_lumberjack)
         .add_system(find_axe_action_system)
@@ -14,11 +12,17 @@ fn main() {
 }
 
 fn create_lumberjack(mut commands: Commands) {
-    commands.spawn_empty().insert(
-        Actor::build(Lumberjack)
-            .with_action(FindAxeAction)
-            .with_action(MoveToTreeAction),
-    );
+    let find_axe_action =
+        Action::build(FindAxeAction).with_precondition(IsAxeAvailableCondition, true);
+
+    let move_to_tree_action =
+        Action::build(MoveToTreeAction).with_precondition(IsTreeAvailableCondition, true);
+
+    let lumberjack = Actor::build(Lumberjack)
+        .with_action(find_axe_action)
+        .with_action(move_to_tree_action);
+
+    commands.spawn_empty().insert(lumberjack);
 }
 
 #[derive(Component, Clone)]
@@ -44,6 +48,10 @@ fn find_axe_action_system(mut query: Query<&mut ActionState, With<FindAxeAction>
     }
 }
 
+struct IsAxeAvailableCondition;
+
+impl Condition for IsAxeAvailableCondition {}
+
 #[derive(Component, Clone)]
 struct MoveToTreeAction;
 
@@ -63,3 +71,7 @@ fn move_to_tree_action_system(mut query: Query<&mut ActionState, With<MoveToTree
         };
     }
 }
+
+struct IsTreeAvailableCondition;
+
+impl Condition for IsTreeAvailableCondition {}

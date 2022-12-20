@@ -1,14 +1,23 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    any::TypeId,
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
 use bevy::prelude::{
     Added, Commands, Component, CoreStage, Entity, EventReader, EventWriter, Plugin, Query,
 };
 
+use inspector::GoapInspectorPlugin;
+
+mod inspector;
+
 pub struct GoapPlugin;
 
 impl Plugin for GoapPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_event::<RequestPlanEvent>()
+        app.add_plugin(GoapInspectorPlugin)
+            .add_event::<RequestPlanEvent>()
             .add_system(build_new_actor_system)
             .add_system(handle_completed_actions_system)
             .add_system_to_stage(CoreStage::Last, request_plan_event_handler_system);
@@ -22,7 +31,7 @@ pub struct Actor {
 }
 
 impl Actor {
-    pub fn build(marker_component: impl ActorMarkerComponent + 'static) -> ActorBuilder {
+    pub fn build(marker_component: impl MarkerComponent + 'static) -> ActorBuilder {
         ActorBuilder {
             marker_component: Arc::new(marker_component),
             actions: vec![],
@@ -32,25 +41,25 @@ impl Actor {
 
 #[derive(Component)]
 pub struct ActorBuilder {
-    marker_component: Arc<dyn ActorMarkerComponent>,
-    actions: Vec<Arc<dyn ActionBuilder>>,
+    marker_component: Arc<dyn MarkerComponent>,
+    actions: Vec<Arc<dyn BuildAction>>,
 }
 
-pub trait ActorMarkerComponent: Send + Sync {
-    fn build(&self, commands: &mut Commands, actor_entity: Entity);
+pub trait MarkerComponent: Send + Sync {
+    fn insert(&self, commands: &mut Commands, entity_to_insert_to: Entity);
 }
 
-impl<T> ActorMarkerComponent for T
+impl<T> MarkerComponent for T
 where
     T: Component + Clone + Send + Sync,
 {
-    fn build(&self, commands: &mut Commands, actor_entity: Entity) {
-        commands.entity(actor_entity).insert(T::clone(self));
+    fn insert(&self, commands: &mut Commands, entity_to_insert_to: Entity) {
+        commands.entity(entity_to_insert_to).insert(T::clone(self));
     }
 }
 
 impl ActorBuilder {
-    pub fn with_action(mut self, action: impl ActionBuilder + 'static) -> Self {
+    pub fn with_action(mut self, action: impl BuildAction + 'static) -> Self {
         self.actions.push(Arc::new(action));
         self
     }
@@ -70,31 +79,60 @@ impl ActorBuilder {
             })
             .remove::<ActorBuilder>();
 
-        self.marker_component.build(commands, actor_entity);
+        self.marker_component.insert(commands, actor_entity);
     }
 }
 
 #[derive(Component)]
-struct Action {
+pub struct Action {
     actor_entity: Entity,
+    preconditions: HashMap<TypeId, bool>,
 }
 
-pub trait ActionBuilder: Send + Sync {
+impl Action {
+    pub fn build(marker_component: impl MarkerComponent + 'static) -> ActionBuilder {
+        ActionBuilder {
+            marker_component: Arc::new(marker_component),
+            preconditions: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ActionBuilder {
+    marker_component: Arc<dyn MarkerComponent>,
+    preconditions: HashMap<TypeId, bool>,
+}
+
+impl ActionBuilder {
+    pub fn with_precondition<T: Condition + 'static>(
+        mut self,
+        _precondition: T,
+        value: bool,
+    ) -> ActionBuilder {
+        self.preconditions.insert(TypeId::of::<T>(), value);
+        self
+    }
+}
+
+pub trait BuildAction: Send + Sync {
     fn build(&self, commands: &mut Commands, actor_entity: Entity) -> Entity;
 }
 
-impl<T> ActionBuilder for T
-where
-    T: Component + Clone + Send + Sync,
-{
+impl BuildAction for ActionBuilder {
     fn build(&self, commands: &mut Commands, actor_entity: Entity) -> Entity {
-        let action_component = T::clone(self);
-        commands
+        let action_entity = commands
             .spawn_empty()
-            .insert(action_component)
-            .insert(Action { actor_entity })
+            .insert(Action {
+                actor_entity,
+                preconditions: self.preconditions.clone(),
+            })
             .insert(ActionState::Idle)
-            .id()
+            .id();
+
+        self.marker_component.insert(commands, action_entity);
+
+        action_entity
     }
 }
 
@@ -168,3 +206,5 @@ pub enum ActionState {
 }
 
 struct RequestPlanEvent(Entity);
+
+pub trait Condition {}
