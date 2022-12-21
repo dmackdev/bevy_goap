@@ -68,7 +68,7 @@ pub fn request_plan_event_handler_system(
             };
 
             let (node_path, _) = astar(
-                &start_node,
+                &&start_node,
                 |node| node.successors(&actor_action_nodes),
                 |_| 1, // TODO: Need a heuristic. Alternatively, Dijkstra could be used to solely use the action's cost.
                 |node| node.postconditions_match_preconditions_of(&goal_node), // This will exclude the goal node from the path.
@@ -109,12 +109,12 @@ impl PartialEq for Node {
 }
 
 impl Node {
-    fn successors(&self, nodes: &[Node]) -> Vec<(Node, i32)> {
+    fn successors<'a>(&self, nodes: &'a [Node]) -> Vec<(&'a Node, i32)> {
         nodes
             .iter()
             .filter_map(|other| {
                 if self.postconditions_match_preconditions_of(other) {
-                    Some((other.clone(), 1)) // TODO: need to add action cost here.
+                    Some((other, 1)) // TODO: need to add action cost here.
                 } else {
                     None
                 }
