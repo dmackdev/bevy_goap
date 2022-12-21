@@ -12,6 +12,10 @@ use crate::{
 
 pub struct RequestPlanEvent(pub(crate) Entity);
 
+// TODO: Introduce a planning "queue" which queues up the plan request events.
+// The next plan request can be handled when the action started by the previous plan transitions out of ActionState::Started.
+// Probably need to introduce a ActionState::StartFinished to detect moving out of ActionState::Started.
+// This is because an Action's start phase may modify the world conditions, which could affect the next plan.
 pub fn request_plan_event_handler_system(
     mut ev_request_plan: EventReader<RequestPlanEvent>,
     mut actors: Query<&mut Actor>,
