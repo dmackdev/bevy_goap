@@ -1,8 +1,10 @@
-use std::{any::TypeId, collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use bevy::prelude::{Commands, Component, Entity, Query};
 
-use crate::{actor::Actor, common::MarkerComponent, condition::Condition, WorldCondition};
+use crate::{
+    actor::Actor, common::MarkerComponent, condition::Condition, state::GoapState, WorldCondition,
+};
 
 #[derive(Component)]
 pub enum ActionState {
@@ -14,18 +16,18 @@ pub enum ActionState {
 #[derive(Component, Clone)]
 pub struct Action {
     actor_entity: Entity,
-    pub(crate) preconditions: HashMap<TypeId, bool>,
-    pub(crate) world_preconditions: HashMap<TypeId, bool>,
-    pub(crate) postconditions: HashMap<TypeId, bool>,
+    pub(crate) preconditions: GoapState,
+    pub(crate) world_preconditions: GoapState,
+    pub(crate) postconditions: GoapState,
 }
 
 impl Action {
     pub fn build(marker_component: impl MarkerComponent + 'static) -> ActionBuilder {
         ActionBuilder {
             marker_component: Arc::new(marker_component),
-            preconditions: HashMap::new(),
-            world_preconditions: HashMap::new(),
-            postconditions: HashMap::new(),
+            preconditions: GoapState::new(),
+            world_preconditions: GoapState::new(),
+            postconditions: GoapState::new(),
         }
     }
 }
@@ -33,9 +35,9 @@ impl Action {
 #[derive(Clone)]
 pub struct ActionBuilder {
     marker_component: Arc<dyn MarkerComponent>,
-    preconditions: HashMap<TypeId, bool>,
-    world_preconditions: HashMap<TypeId, bool>,
-    postconditions: HashMap<TypeId, bool>,
+    preconditions: GoapState,
+    world_preconditions: GoapState,
+    postconditions: GoapState,
 }
 
 impl ActionBuilder {
@@ -44,7 +46,7 @@ impl ActionBuilder {
         _precondition: T,
         value: bool,
     ) -> ActionBuilder {
-        self.preconditions.insert(TypeId::of::<T>(), value);
+        self.preconditions.insert::<T>(value);
         self
     }
 
@@ -52,7 +54,7 @@ impl ActionBuilder {
         mut self,
         value: bool,
     ) -> ActionBuilder {
-        self.world_preconditions.insert(TypeId::of::<T>(), value);
+        self.world_preconditions.insert::<T>(value);
         self
     }
 
@@ -61,7 +63,7 @@ impl ActionBuilder {
         _postcondition: T,
         value: bool,
     ) -> ActionBuilder {
-        self.postconditions.insert(TypeId::of::<T>(), value);
+        self.postconditions.insert::<T>(value);
         self
     }
 }

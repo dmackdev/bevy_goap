@@ -1,5 +1,3 @@
-use std::any::TypeId;
-
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_goap::{
     Action, ActionState, Actor, Condition, GoapPlugin, GoapWorldState, WorldCondition,
@@ -148,9 +146,6 @@ fn update_is_axe_available_world_condition(
 
     for _ in changed_axes.iter() {
         println!("Changed axe!");
-        world_state.state.insert(
-            TypeId::of::<IsAxeAvailableWorldCondition>(),
-            condition.value(),
-        );
+        world_state.insert::<IsAxeAvailableWorldCondition>(condition.value());
     }
 }

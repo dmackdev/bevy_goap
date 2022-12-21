@@ -1,13 +1,10 @@
+use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
-use std::{
-    any::TypeId,
-    collections::{HashMap, VecDeque},
-};
 
 use bevy::prelude::{Entity, EventReader, Query};
 use pathfinding::prelude::astar;
 
-use crate::state::GoapWorldState;
+use crate::state::{GoapState, GoapWorldState};
 use crate::{
     action::{Action, ActionState},
     actor::Actor,
@@ -50,12 +47,12 @@ pub fn request_plan_event_handler_system(
                 .collect::<Vec<_>>();
 
             let mut start_postconditions = actor.current_state.clone();
-            start_postconditions.extend(world_state.state.clone());
+            start_postconditions.extend(world_state.get());
 
             let start_node = Node {
                 id: 0,
                 action_entity: None,
-                preconditions: HashMap::new(),
+                preconditions: GoapState::new(),
                 postconditions: start_postconditions,
             };
 
@@ -63,7 +60,7 @@ pub fn request_plan_event_handler_system(
                 id: actor_action_nodes.len() + 1,
                 action_entity: None,
                 preconditions: actor.current_goal.clone(),
-                postconditions: HashMap::new(),
+                postconditions: GoapState::new(),
             };
 
             let (node_path, _) = astar(
@@ -91,8 +88,8 @@ pub fn request_plan_event_handler_system(
 struct Node {
     id: usize,
     action_entity: Option<Entity>,
-    preconditions: HashMap<TypeId, bool>,
-    postconditions: HashMap<TypeId, bool>,
+    preconditions: GoapState,
+    postconditions: GoapState,
 }
 
 impl Hash for Node {
@@ -122,8 +119,8 @@ impl Node {
     }
 
     fn postconditions_match_preconditions_of(&self, other: &Node) -> bool {
-        for (key, pre_cond) in other.preconditions.iter() {
-            match self.postconditions.get(key) {
+        for (key, pre_cond) in other.preconditions.state.iter() {
+            match self.postconditions.state.get(key) {
                 Some(post_cond) if post_cond == pre_cond => continue,
                 _ => return false,
             }

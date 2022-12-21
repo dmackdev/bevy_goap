@@ -1,19 +1,17 @@
-use std::{
-    any::TypeId,
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-};
+use std::{collections::VecDeque, sync::Arc};
 
 use bevy::prelude::{Added, Commands, Component, Entity, EventWriter, Query};
 
-use crate::{action::BuildAction, common::MarkerComponent, Condition, RequestPlanEvent};
+use crate::{
+    action::BuildAction, common::MarkerComponent, state::GoapState, Condition, RequestPlanEvent,
+};
 
 #[derive(Component)]
 pub struct Actor {
     pub(crate) actions: Vec<Entity>,
     pub(crate) current_path: VecDeque<Entity>,
-    pub(crate) current_state: HashMap<TypeId, bool>,
-    pub(crate) current_goal: HashMap<TypeId, bool>,
+    pub(crate) current_state: GoapState,
+    pub(crate) current_goal: GoapState,
 }
 
 impl Actor {
@@ -21,15 +19,12 @@ impl Actor {
         ActorBuilder {
             marker_component: Arc::new(marker_component),
             actions: vec![],
-            initial_state: HashMap::new(),
-            initial_goal: HashMap::new(),
+            initial_state: GoapState::new(),
+            initial_goal: GoapState::new(),
         }
     }
 
-    pub(crate) fn complete_action(
-        &mut self,
-        postconditions: HashMap<TypeId, bool>,
-    ) -> Option<&Entity> {
+    pub(crate) fn complete_action(&mut self, postconditions: GoapState) -> Option<&Entity> {
         self.current_state.extend(postconditions);
         self.current_path.pop_front();
         self.current_path.front()
@@ -40,8 +35,8 @@ impl Actor {
 pub struct ActorBuilder {
     marker_component: Arc<dyn MarkerComponent>,
     actions: Vec<Arc<dyn BuildAction>>,
-    initial_state: HashMap<TypeId, bool>,
-    initial_goal: HashMap<TypeId, bool>,
+    initial_state: GoapState,
+    initial_goal: GoapState,
 }
 
 impl ActorBuilder {
@@ -55,12 +50,12 @@ impl ActorBuilder {
         _condition: T,
         value: bool,
     ) -> Self {
-        self.initial_state.insert(TypeId::of::<T>(), value);
+        self.initial_state.insert::<T>(value);
         self
     }
 
     pub fn with_goal<T: Condition + 'static>(mut self, _condition: T, value: bool) -> Self {
-        self.initial_goal.insert(TypeId::of::<T>(), value);
+        self.initial_goal.insert::<T>(value);
         self
     }
 
