@@ -9,13 +9,18 @@ use crate::{
 #[derive(Component, Debug)]
 pub enum ActionState {
     Idle,
+    /// Use this state to perform initialisation operations required for the execution of the Action, e.g. update components on the Actor's entity to move it to a target.
+    Started,
+    /// Use this state to check whether the Action has completed, e.g. check whether the Actor has reached a target.
     Executing,
     Complete,
+    /// The Action failed during execution and the Actor requires a replan for its action sequence.
+    Failure,
 }
 
 #[derive(Component, Clone, Debug)]
 pub struct Action {
-    actor_entity: Entity,
+    pub actor_entity: Entity,
     pub(crate) preconditions: GoapState,
     pub(crate) world_preconditions: GoapState,
     pub(crate) postconditions: GoapState,

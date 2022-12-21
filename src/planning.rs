@@ -78,7 +78,7 @@ pub fn request_plan_event_handler_system(
 
             if let Some(action_entity) = actor.current_path.front() {
                 let mut action_state = action_states.get_mut(*action_entity).unwrap();
-                *action_state = ActionState::Executing;
+                *action_state = ActionState::Started;
             }
         }
     }

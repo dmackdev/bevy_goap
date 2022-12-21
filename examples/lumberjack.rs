@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_goap::{
     Action, ActionState, Actor, Condition, GoapPlugin, GoapWorldState, WorldCondition,
@@ -50,9 +52,27 @@ struct Lumberjack;
 #[derive(Component, Clone)]
 struct GetAxeAction;
 
-fn get_axe_action_system(mut query: Query<&mut ActionState, With<GetAxeAction>>) {
-    for mut action_state in query.iter_mut() {
+fn get_axe_action_system(
+    mut query: Query<(&Action, &mut ActionState), With<GetAxeAction>>,
+    mut axes: Query<&mut Axe>,
+) {
+    let mut unclaimed_axes = axes
+        .iter_mut()
+        .filter(|axe| axe.owner.is_none())
+        .collect::<VecDeque<_>>();
+
+    for (action, mut action_state) in query.iter_mut() {
         match *action_state {
+            ActionState::Started => {
+                if let Some(mut axe) = unclaimed_axes.pop_front() {
+                    println!("Claimed an axe!");
+                    axe.owner = Some(action.actor_entity);
+                    *action_state = ActionState::Executing;
+                } else {
+                    println!("No available axe to claim!");
+                    *action_state = ActionState::Failure;
+                }
+            }
             ActionState::Executing => {
                 println!("Getting axe!");
 
