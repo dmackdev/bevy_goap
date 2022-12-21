@@ -106,14 +106,21 @@ impl ChopTreeAction {
 
 fn chop_tree_action_system(mut query: Query<(&mut ActionState, &mut ChopTreeAction)>) {
     for (mut action_state, mut chop_tree_action) in query.iter_mut() {
-        if let ActionState::Executing = *action_state {
-            chop_tree_action.current_chops += 1;
-            println!("Chopped tree {} times!", chop_tree_action.current_chops);
-
-            if chop_tree_action.current_chops >= chop_tree_action.max_chops {
-                *action_state = ActionState::Complete;
+        match *action_state {
+            ActionState::Started => {
+                println!("Starting to chop!");
+                *action_state = ActionState::Executing;
             }
-        };
+            ActionState::Executing => {
+                chop_tree_action.current_chops += 1;
+                println!("Chopped tree {} times!", chop_tree_action.current_chops);
+
+                if chop_tree_action.current_chops >= chop_tree_action.max_chops {
+                    *action_state = ActionState::Complete;
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -122,11 +129,17 @@ struct CollectWoodAction;
 
 fn collect_wood_action_system(mut query: Query<&mut ActionState, With<CollectWoodAction>>) {
     for mut action_state in query.iter_mut() {
-        if let ActionState::Executing = *action_state {
-            println!("Collecting wood!");
-
-            *action_state = ActionState::Complete;
-        };
+        match *action_state {
+            ActionState::Started => {
+                println!("Starting to collect wood!");
+                *action_state = ActionState::Executing;
+            }
+            ActionState::Executing => {
+                println!("Collecting wood!");
+                *action_state = ActionState::Complete;
+            }
+            _ => (),
+        }
     }
 }
 
@@ -165,7 +178,8 @@ fn update_is_axe_available_world_condition(
     let mut world_state = world_state_query.single_mut();
 
     for _ in changed_axes.iter() {
-        println!("Changed axe!");
+        println!("Updating IsAxeAvailableWorldCondition");
+        // TODO: Probably need to check whether the value has actually changed, to avoid an uneeded mut access which would affect Changed queries.
         world_state.insert::<IsAxeAvailableWorldCondition>(condition.value());
     }
 }
