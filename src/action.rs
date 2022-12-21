@@ -6,14 +6,14 @@ use crate::{
     actor::Actor, common::MarkerComponent, condition::Condition, state::GoapState, WorldCondition,
 };
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub enum ActionState {
     Idle,
     Executing,
     Complete,
 }
 
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Debug)]
 pub struct Action {
     actor_entity: Entity,
     pub(crate) preconditions: GoapState,

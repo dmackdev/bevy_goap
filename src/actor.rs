@@ -6,7 +6,7 @@ use crate::{
     action::BuildAction, common::MarkerComponent, state::GoapState, Condition, RequestPlanEvent,
 };
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Actor {
     pub(crate) actions: Vec<Entity>,
     pub(crate) current_path: VecDeque<Entity>,

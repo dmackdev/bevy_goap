@@ -25,7 +25,7 @@ impl GoapState {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct GoapWorldState {
     state: GoapState,
 }
