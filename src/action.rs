@@ -2,7 +2,7 @@ use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 use bevy::prelude::{Commands, Component, Entity, Query};
 
-use crate::{actor::Actor, common::MarkerComponent, condition::Condition};
+use crate::{actor::Actor, common::MarkerComponent, condition::Condition, WorldCondition};
 
 #[derive(Component)]
 pub enum ActionState {
@@ -15,6 +15,7 @@ pub enum ActionState {
 pub struct Action {
     actor_entity: Entity,
     pub(crate) preconditions: HashMap<TypeId, bool>,
+    pub(crate) world_preconditions: HashMap<TypeId, bool>,
     pub(crate) postconditions: HashMap<TypeId, bool>,
 }
 
@@ -23,6 +24,7 @@ impl Action {
         ActionBuilder {
             marker_component: Arc::new(marker_component),
             preconditions: HashMap::new(),
+            world_preconditions: HashMap::new(),
             postconditions: HashMap::new(),
         }
     }
@@ -32,6 +34,7 @@ impl Action {
 pub struct ActionBuilder {
     marker_component: Arc<dyn MarkerComponent>,
     preconditions: HashMap<TypeId, bool>,
+    world_preconditions: HashMap<TypeId, bool>,
     postconditions: HashMap<TypeId, bool>,
 }
 
@@ -42,6 +45,14 @@ impl ActionBuilder {
         value: bool,
     ) -> ActionBuilder {
         self.preconditions.insert(TypeId::of::<T>(), value);
+        self
+    }
+
+    pub fn with_world_precondition<T: WorldCondition + 'static>(
+        mut self,
+        value: bool,
+    ) -> ActionBuilder {
+        self.world_preconditions.insert(TypeId::of::<T>(), value);
         self
     }
 
@@ -65,6 +76,7 @@ impl BuildAction for ActionBuilder {
             .spawn_empty()
             .insert(Action {
                 actor_entity,
+                world_preconditions: self.world_preconditions.clone(),
                 preconditions: self.preconditions.clone(),
                 postconditions: self.postconditions.clone(),
             })

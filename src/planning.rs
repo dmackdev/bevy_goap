@@ -7,6 +7,7 @@ use std::{
 use bevy::prelude::{Entity, EventReader, Query};
 use pathfinding::prelude::astar;
 
+use crate::state::GoapWorldState;
 use crate::{
     action::{Action, ActionState},
     actor::Actor,
@@ -19,7 +20,10 @@ pub fn request_plan_event_handler_system(
     mut actors: Query<&mut Actor>,
     mut action_states: Query<&mut ActionState>,
     actions: Query<&Action>,
+    world_state_query: Query<&GoapWorldState>,
 ) {
+    let world_state = world_state_query.single();
+
     for ev in ev_request_plan.iter() {
         println!("Plan requested for {:?}", ev.0);
 
@@ -32,20 +36,27 @@ pub fn request_plan_event_handler_system(
                 .enumerate()
                 .map(|(idx, action_entity)| {
                     let action = actions.get(*action_entity).unwrap();
+
+                    let mut preconditions = action.preconditions.clone();
+                    preconditions.extend(action.world_preconditions.clone());
+
                     Node {
                         id: idx + 1,
                         action_entity: Some(*action_entity),
-                        preconditions: action.preconditions.clone(),
+                        preconditions,
                         postconditions: action.postconditions.clone(),
                     }
                 })
                 .collect::<Vec<_>>();
 
+            let mut start_postconditions = actor.current_state.clone();
+            start_postconditions.extend(world_state.state.clone());
+
             let start_node = Node {
                 id: 0,
                 action_entity: None,
                 preconditions: HashMap::new(),
-                postconditions: actor.current_state.clone(),
+                postconditions: start_postconditions,
             };
 
             let goal_node = Node {

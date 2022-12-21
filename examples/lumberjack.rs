@@ -1,14 +1,20 @@
-use bevy::prelude::*;
-use bevy_goap::{Action, ActionState, Actor, Condition, GoapPlugin};
+use std::any::TypeId;
+
+use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy_goap::{
+    Action, ActionState, Actor, Condition, GoapPlugin, GoapWorldState, WorldCondition,
+};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(GoapPlugin)
         .add_startup_system(create_lumberjack)
+        .add_startup_system(create_axes_system)
         .add_system(get_axe_action_system)
         .add_system(chop_tree_action_system)
         .add_system(collect_wood_action_system)
+        .add_system(update_is_axe_available_world_condition)
         .run();
 }
 
@@ -16,6 +22,7 @@ fn create_lumberjack(mut commands: Commands) {
     // Considering only actions with conditions that are local to the actor (and not world) for the moment.
 
     let get_axe_action = Action::build(GetAxeAction)
+        .with_world_precondition::<IsAxeAvailableWorldCondition>(true)
         .with_precondition(ActorHasAxeCondition, false)
         .with_postcondition(ActorHasAxeCondition, true);
 
@@ -23,7 +30,7 @@ fn create_lumberjack(mut commands: Commands) {
         .with_precondition(ActorHasAxeCondition, true)
         .with_postcondition(ActorHasWoodCondition, true);
 
-    let collect_wood_action = Action::build(CollectWoodAction)
+    let _collect_wood_action = Action::build(CollectWoodAction)
         .with_precondition(ActorHasWoodCondition, false)
         .with_postcondition(ActorHasWoodCondition, true);
 
@@ -33,7 +40,7 @@ fn create_lumberjack(mut commands: Commands) {
         .with_initial_condition(ActorHasWoodCondition, false)
         .with_goal(ActorHasWoodCondition, true)
         .with_action(get_axe_action)
-        .with_action(collect_wood_action)
+        // .with_action(_collect_wood_action) // Try uncommenting this action to observe a different action sequence the lumberjack performs!
         .with_action(chop_tree_action);
 
     commands.spawn_empty().insert(lumberjack);
@@ -107,3 +114,43 @@ fn collect_wood_action_system(mut query: Query<&mut ActionState, With<CollectWoo
 
 struct ActorHasWoodCondition;
 impl Condition for ActorHasWoodCondition {}
+
+#[derive(Component)]
+struct Axe {
+    owner: Option<Entity>,
+}
+
+fn create_axes_system(mut commands: Commands) {
+    commands.spawn_empty().insert(Axe { owner: None });
+}
+
+#[derive(SystemParam)]
+struct IsAxeAvailableWorldCondition<'w, 's> {
+    axe_query: Query<'w, 's, &'static Axe>,
+}
+
+impl<'w, 's> WorldCondition for IsAxeAvailableWorldCondition<'w, 's> {
+    fn value(&self) -> bool {
+        self.axe_query
+            .iter()
+            .filter(|axe| axe.owner.is_none())
+            .count()
+            > 0
+    }
+}
+
+fn update_is_axe_available_world_condition(
+    mut world_state_query: Query<&mut GoapWorldState>,
+    condition: IsAxeAvailableWorldCondition,
+    changed_axes: Query<(), Changed<Axe>>,
+) {
+    let mut world_state = world_state_query.single_mut();
+
+    for _ in changed_axes.iter() {
+        println!("Changed axe!");
+        world_state.state.insert(
+            TypeId::of::<IsAxeAvailableWorldCondition>(),
+            condition.value(),
+        );
+    }
+}
