@@ -115,7 +115,7 @@ pub fn handle_completed_actions_system(
 
         if let Some(next_action_entity) = actor.complete_action(postconditions) {
             let (_, mut next_action_state) = query.get_mut(*next_action_entity).unwrap();
-            *next_action_state = ActionState::Executing;
+            *next_action_state = ActionState::Started;
         }
     }
 }
