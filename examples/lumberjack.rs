@@ -157,29 +157,28 @@ fn create_axes_system(mut commands: Commands) {
 
 #[derive(SystemParam)]
 struct IsAxeAvailableWorldCondition<'w, 's> {
-    axe_query: Query<'w, 's, &'static Axe>,
+    world_state_query: Query<'w, 's, &'static mut GoapWorldState>,
+    axes_query: Query<'w, 's, &'static Axe>,
+    changed_axes_query: Query<'w, 's, (), Changed<Axe>>,
 }
 
 impl<'w, 's> WorldCondition for IsAxeAvailableWorldCondition<'w, 's> {
-    fn value(&self) -> bool {
-        self.axe_query
-            .iter()
-            .filter(|axe| axe.owner.is_none())
-            .count()
-            > 0
+    fn update(&mut self) {
+        let mut world_state = self.world_state_query.single_mut();
+
+        if self.changed_axes_query.iter().count() > 0 {
+            let is_axe_available = self
+                .axes_query
+                .iter()
+                .filter(|axe| axe.owner.is_none())
+                .count()
+                > 0;
+
+            world_state.insert::<IsAxeAvailableWorldCondition>(is_axe_available);
+        }
     }
 }
 
-fn update_is_axe_available_world_condition(
-    mut world_state_query: Query<&mut GoapWorldState>,
-    condition: IsAxeAvailableWorldCondition,
-    changed_axes: Query<(), Changed<Axe>>,
-) {
-    let mut world_state = world_state_query.single_mut();
-
-    for _ in changed_axes.iter() {
-        println!("Updating IsAxeAvailableWorldCondition");
-        // TODO: Probably need to check whether the value has actually changed, to avoid an uneeded mut access which would affect Changed queries.
-        world_state.insert::<IsAxeAvailableWorldCondition>(condition.value());
-    }
+fn update_is_axe_available_world_condition(mut condition: IsAxeAvailableWorldCondition) {
+    condition.update();
 }
