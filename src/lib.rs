@@ -1,4 +1,4 @@
-use action::handle_completed_actions_system;
+use action::action_system;
 use actor::build_new_actor_system;
 use bevy::prelude::{CoreStage, Plugin};
 
@@ -28,7 +28,7 @@ impl Plugin for GoapPlugin {
             .add_event::<RequestPlanEvent>()
             .add_startup_system(create_world_state_system)
             .add_system(build_new_actor_system)
-            .add_system(handle_completed_actions_system)
+            .add_system(action_system)
             .add_system_to_stage(CoreStage::Last, request_plan_event_handler_system);
     }
 }

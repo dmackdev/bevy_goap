@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use bevy::prelude::{Commands, Component, Entity, Query};
+use bevy::prelude::{Commands, Component, Entity, EventWriter, Query};
 
 use crate::{
-    actor::Actor, common::MarkerComponent, condition::Condition, state::GoapState, WorldCondition,
+    actor::Actor, common::MarkerComponent, condition::Condition, planning::RequestPlanEvent,
+    state::GoapState, WorldCondition,
 };
 
 #[derive(Component, Debug)]
@@ -96,17 +97,25 @@ impl BuildAction for ActionBuilder {
     }
 }
 
-pub fn handle_completed_actions_system(
+pub fn action_system(
     mut actors: Query<&mut Actor>,
     mut query: Query<(&Action, &mut ActionState)>,
+    mut ev_request_plan: EventWriter<RequestPlanEvent>,
 ) {
     let mut completed = vec![];
 
     for (action, mut action_state) in query.iter_mut() {
-        if let ActionState::Complete = *action_state {
-            *action_state = ActionState::Idle;
+        match *action_state {
+            ActionState::Complete => {
+                *action_state = ActionState::Idle;
 
-            completed.push((action.actor_entity, action.postconditions.clone()));
+                completed.push((action.actor_entity, action.postconditions.clone()));
+            }
+            ActionState::Failure => {
+                *action_state = ActionState::Idle;
+                ev_request_plan.send(RequestPlanEvent(action.actor_entity));
+            }
+            _ => (),
         };
     }
 
