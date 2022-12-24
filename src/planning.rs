@@ -80,35 +80,29 @@ pub fn create_plan_system(
             let actor_action_nodes = actor
                 .actions
                 .iter()
-                .enumerate()
-                .filter_map(
-                    |(idx, action_entity)| match action_states.get(*action_entity) {
-                        // Only consider actions that have a succesful evaluation.
-                        Ok(ActionState::EvaluationSuccess) => {
-                            let action = actions.get(*action_entity).unwrap();
+                .filter_map(|action_entity| match action_states.get(*action_entity) {
+                    // Only consider actions that have a succesful evaluation.
+                    Ok(ActionState::EvaluationSuccess) => {
+                        let action = actions.get(*action_entity).unwrap();
 
-                            Some(Node {
-                                id: idx + 1,
-                                action_entity: Some(*action_entity),
-                                preconditions: action.preconditions.clone(),
-                                postconditions: action.postconditions.clone(),
-                            })
-                        }
-                        _ => None,
-                    },
-                )
+                        Some(Node {
+                            id: NodeId::Action(*action_entity),
+                            preconditions: action.preconditions.clone(),
+                            postconditions: action.postconditions.clone(),
+                        })
+                    }
+                    _ => None,
+                })
                 .collect::<Vec<_>>();
 
             let start_node = Node {
-                id: 0,
-                action_entity: None,
+                id: NodeId::Start,
                 preconditions: GoapState::new(),
                 postconditions: actor.current_state.clone(),
             };
 
             let goal_node = Node {
-                id: actor_action_nodes.len() + 1,
-                action_entity: None,
+                id: NodeId::Goal,
                 preconditions: actor.current_goal.clone(),
                 postconditions: GoapState::new(),
             };
@@ -121,8 +115,10 @@ pub fn create_plan_system(
             )
             .unwrap_or((vec![], 0));
 
-            // start_node does not have a populated action_entity, so it will be filtered out from the path here.
-            let action_path = node_path.iter().filter_map(|node| node.action_entity);
+            let action_path = node_path.iter().filter_map(|node| match node.id {
+                NodeId::Action(e) => Some(e),
+                _ => None,
+            });
 
             actor.current_path = VecDeque::from_iter(action_path);
 
@@ -139,10 +135,16 @@ pub fn create_plan_system(
     planning_state_query.single_mut().queue = new_queue;
 }
 
+#[derive(Hash, Clone, Debug, PartialEq, Eq)]
+enum NodeId {
+    Action(Entity),
+    Start,
+    Goal,
+}
+
 #[derive(Debug, Clone, Eq)]
 struct Node {
-    id: usize,
-    action_entity: Option<Entity>,
+    id: NodeId,
     preconditions: GoapState,
     postconditions: GoapState,
 }
