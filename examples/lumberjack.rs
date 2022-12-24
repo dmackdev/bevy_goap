@@ -1,28 +1,21 @@
-use std::collections::VecDeque;
-
-use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_goap::{
-    Action, ActionState, Actor, Condition, GoapPlugin, GoapWorldState, WorldCondition,
-};
+use bevy::prelude::*;
+use bevy_goap::{Action, ActionState, Actor, Condition, GoapPlugin};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(GoapPlugin)
         .add_startup_system(create_lumberjack)
+        .add_startup_system(create_lumberjack)
         .add_startup_system(create_axes_system)
         .add_system(get_axe_action_system)
         .add_system(chop_tree_action_system)
         .add_system(collect_wood_action_system)
-        .add_system(update_is_axe_available_world_condition)
         .run();
 }
 
 fn create_lumberjack(mut commands: Commands) {
-    // Considering only actions with conditions that are local to the actor (and not world) for the moment.
-
     let get_axe_action = Action::build(GetAxeAction)
-        .with_world_precondition::<IsAxeAvailableWorldCondition>(true)
         .with_precondition(ActorHasAxeCondition, false)
         .with_postcondition(ActorHasAxeCondition, true);
 
@@ -59,19 +52,28 @@ fn get_axe_action_system(
     let mut unclaimed_axes = axes
         .iter_mut()
         .filter(|axe| axe.owner.is_none())
-        .collect::<VecDeque<_>>();
+        .collect::<Vec<_>>();
 
     for (action, mut action_state) in query.iter_mut() {
         match *action_state {
-            ActionState::Started => {
-                if let Some(mut axe) = unclaimed_axes.pop_front() {
+            ActionState::Evaluate => {
+                println!("Evaluating GetAxeAction");
+                if let Some(mut axe) = unclaimed_axes.pop() {
                     println!("Claimed an axe!");
+
                     axe.owner = Some(action.actor_entity);
-                    *action_state = ActionState::Executing;
+
+                    *action_state = ActionState::EvaluationSuccess;
                 } else {
                     println!("No available axe to claim!");
-                    *action_state = ActionState::Failure;
+
+                    *action_state = ActionState::EvaluationFailure;
                 }
+            }
+            ActionState::Started => {
+                println!("Starting GetAxeAction");
+
+                *action_state = ActionState::Executing;
             }
             ActionState::Executing => {
                 println!("Getting axe!");
@@ -107,6 +109,9 @@ impl ChopTreeAction {
 fn chop_tree_action_system(mut query: Query<(&mut ActionState, &mut ChopTreeAction)>) {
     for (mut action_state, mut chop_tree_action) in query.iter_mut() {
         match *action_state {
+            ActionState::Evaluate => {
+                *action_state = ActionState::EvaluationSuccess;
+            }
             ActionState::Started => {
                 println!("Starting to chop!");
                 *action_state = ActionState::Executing;
@@ -153,32 +158,4 @@ struct Axe {
 
 fn create_axes_system(mut commands: Commands) {
     commands.spawn_empty().insert(Axe { owner: None });
-}
-
-#[derive(SystemParam)]
-struct IsAxeAvailableWorldCondition<'w, 's> {
-    world_state_query: Query<'w, 's, &'static mut GoapWorldState>,
-    axes_query: Query<'w, 's, &'static Axe>,
-    changed_axes_query: Query<'w, 's, (), Changed<Axe>>,
-}
-
-impl<'w, 's> WorldCondition for IsAxeAvailableWorldCondition<'w, 's> {
-    fn update(&mut self) {
-        let mut world_state = self.world_state_query.single_mut();
-
-        if self.changed_axes_query.iter().count() > 0 {
-            let is_axe_available = self
-                .axes_query
-                .iter()
-                .filter(|axe| axe.owner.is_none())
-                .count()
-                > 0;
-
-            world_state.insert::<IsAxeAvailableWorldCondition>(is_axe_available);
-        }
-    }
-}
-
-fn update_is_axe_available_world_condition(mut condition: IsAxeAvailableWorldCondition) {
-    condition.update();
 }

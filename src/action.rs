@@ -9,13 +9,27 @@ use crate::{
 
 #[derive(Component, Debug)]
 pub enum ActionState {
+    /// An `Action` in this state is currently not executing, nor being considered for a plan.
     Idle,
-    /// Use this state to perform initialisation operations required for the execution of the Action, e.g. update components on the Actor's entity to move it to a target.
+    /// A plan has been requested for the `Actor` owning this `Action`, so this `Action` must be be evaluated for its viability to be included in the plan, and, if viable, to update the `Action` cost.
+    ///
+    /// This may depend on the current world state, extraneous to the local state of the `Actor`. It is important to note that since all possible `Actions` for a particular `Actor` are evaluated at the time of requesting the plan,
+    /// any `Action` that could come later in a plan may no longer be satisfied by the world state at the time of starting it, so this may influence how you resolve the evaluation.
+    ///
+    /// - If the `Action` is viable, and a new cost can be calculated, update the cost and transition to `ActionState::EvaluationSuccess` to include it in planning considerations.
+    ///
+    /// - If the `Action` is not viable, or a new cost cannot be calculated, transition to `ActionState::EvaluationFailure` to exclude it from planning considerations.
+    Evaluate,
+    /// The `Action` has been evaluated and is deemed to be viable as a candidate in the next plan, with an updated cost.
+    EvaluationSuccess,
+    /// The `Action` has been evaluated and is deemed to be **not** viable as a candidate in the next plan. It will not be considered in the next plan.
+    EvaluationFailure,
+    /// Use this state to perform initialisation operations required for the execution of the `Action`, e.g. update components on the `Actor`'s entity to move it to a target.
     Started,
-    /// Use this state to check whether the Action has completed, e.g. check whether the Actor has reached a target.
+    /// Use this state to check whether the `Action` has completed, e.g. check whether the `Actor` has reached a target.
     Executing,
     Complete,
-    /// The Action failed during execution and the Actor requires a replan for its action sequence.
+    /// The `Action` failed during execution and the `Actor` requires a replan.
     Failure,
 }
 

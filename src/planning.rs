@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
 
-use bevy::prelude::{Entity, EventReader, Query};
+use bevy::prelude::{Commands, Component, Entity, EventReader, Query};
 use pathfinding::prelude::astar;
 
-use crate::state::{GoapState, GoapWorldState};
+use crate::state::GoapState;
 use crate::{
     action::{Action, ActionState},
     actor::Actor,
@@ -12,52 +12,98 @@ use crate::{
 
 pub struct RequestPlanEvent(pub(crate) Entity);
 
-// TODO: Introduce a planning "queue" which queues up the plan request events.
-// The next plan request can be handled when the action started by the previous plan transitions out of ActionState::Started.
-// Probably need to introduce a ActionState::StartFinished to detect moving out of ActionState::Started.
-// This is because an Action's start phase may modify the world conditions, which could affect the next plan.
+#[derive(Component, Default, Debug)]
+pub struct PlanningState {
+    queue: Vec<Entity>,
+}
+
+pub fn create_planning_state(mut commands: Commands) {
+    commands.spawn_empty().insert(PlanningState::default());
+}
+
 pub fn request_plan_event_handler_system(
     mut ev_request_plan: EventReader<RequestPlanEvent>,
+    mut planning_state_query: Query<&mut PlanningState>,
+    actors_query: Query<&Actor>,
+    mut action_states_query: Query<&mut ActionState>,
+) {
+    let mut planning_state = planning_state_query.single_mut();
+
+    for ev in ev_request_plan.iter() {
+        println!("Received RequestPlanEvent");
+        let mut should_queue = false;
+
+        if let Ok(actor) = actors_query.get(ev.0) {
+            for action_entity in actor.actions.iter() {
+                let action_state_result = action_states_query.get_mut(*action_entity);
+
+                if let Ok(mut action_state) = action_state_result {
+                    // Since we have found at least one action that can be in the plan, we can queue this request.
+                    should_queue = true;
+                    *action_state = ActionState::Evaluate;
+                }
+            }
+        }
+
+        if should_queue {
+            println!("Pushing {:?} to queue", ev.0);
+            planning_state.queue.push(ev.0);
+        }
+    }
+}
+
+pub fn create_plan_system(
+    mut planning_state_query: Query<&mut PlanningState>,
     mut actors: Query<&mut Actor>,
     mut action_states: Query<&mut ActionState>,
     actions: Query<&Action>,
-    world_state_query: Query<&GoapWorldState>,
 ) {
-    let world_state = world_state_query.single();
+    let mut new_queue: Vec<Entity> = vec![];
 
-    for ev in ev_request_plan.iter() {
-        println!("Plan requested for {:?}", ev.0);
+    for actor_entity in planning_state_query.single().queue.iter() {
+        println!("Plan requested for {:?}", actor_entity);
 
-        if let Ok(mut actor) = actors.get_mut(ev.0) {
-            println!("Updating path for actor");
+        if let Ok(mut actor) = actors.get_mut(*actor_entity) {
+            let all_actions_ready = actor.actions.iter().all(|action_entity| {
+                matches!(
+                    action_states.get(*action_entity),
+                    Ok(ActionState::EvaluationSuccess) | Ok(ActionState::EvaluationFailure)
+                )
+            });
+
+            if !all_actions_ready {
+                // Not all the actions for this actor have finished evaluating, we must requeue the plan request for this actor to plan it later.
+                new_queue.push(*actor_entity);
+                continue;
+            }
 
             let actor_action_nodes = actor
                 .actions
                 .iter()
                 .enumerate()
-                .map(|(idx, action_entity)| {
-                    let action = actions.get(*action_entity).unwrap();
+                .filter_map(
+                    |(idx, action_entity)| match action_states.get(*action_entity) {
+                        // Only consider actions that have a succesful evaluation.
+                        Ok(ActionState::EvaluationSuccess) => {
+                            let action = actions.get(*action_entity).unwrap();
 
-                    let mut preconditions = action.preconditions.clone();
-                    preconditions.extend(action.world_preconditions.clone());
-
-                    Node {
-                        id: idx + 1,
-                        action_entity: Some(*action_entity),
-                        preconditions,
-                        postconditions: action.postconditions.clone(),
-                    }
-                })
+                            Some(Node {
+                                id: idx + 1,
+                                action_entity: Some(*action_entity),
+                                preconditions: action.preconditions.clone(),
+                                postconditions: action.postconditions.clone(),
+                            })
+                        }
+                        _ => None,
+                    },
+                )
                 .collect::<Vec<_>>();
-
-            let mut start_postconditions = actor.current_state.clone();
-            start_postconditions.extend(world_state.get());
 
             let start_node = Node {
                 id: 0,
                 action_entity: None,
                 preconditions: GoapState::new(),
-                postconditions: start_postconditions,
+                postconditions: actor.current_state.clone(),
             };
 
             let goal_node = Node {
@@ -81,11 +127,16 @@ pub fn request_plan_event_handler_system(
             actor.current_path = VecDeque::from_iter(action_path);
 
             if let Some(action_entity) = actor.current_path.front() {
+                println!("Plan created for {:?}.", actor_entity);
                 let mut action_state = action_states.get_mut(*action_entity).unwrap();
                 *action_state = ActionState::Started;
+            } else {
+                println!("No plan available for {:?}.", actor_entity);
             }
         }
     }
+
+    planning_state_query.single_mut().queue = new_queue;
 }
 
 #[derive(Debug, Clone, Eq)]

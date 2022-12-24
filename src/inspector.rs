@@ -1,7 +1,7 @@
 use bevy::prelude::Plugin;
 use bevy_inspector_egui::{Inspectable, RegisterInspectable, WorldInspectorPlugin};
 
-use crate::{action::Action, ActionState, Actor, GoapWorldState};
+use crate::{action::Action, planning::PlanningState, ActionState, Actor, GoapWorldState};
 
 pub struct GoapInspectorPlugin;
 
@@ -11,7 +11,8 @@ impl Plugin for GoapInspectorPlugin {
             .register_inspectable::<Actor>()
             .register_inspectable::<Action>()
             .register_inspectable::<ActionState>()
-            .register_inspectable::<GoapWorldState>();
+            .register_inspectable::<GoapWorldState>()
+            .register_inspectable::<PlanningState>();
     }
 }
 
@@ -58,6 +59,20 @@ impl Inspectable for ActionState {
 }
 
 impl Inspectable for GoapWorldState {
+    type Attributes = ();
+
+    fn ui(
+        &mut self,
+        ui: &mut bevy_inspector_egui::egui::Ui,
+        _options: Self::Attributes,
+        _context: &mut bevy_inspector_egui::Context,
+    ) -> bool {
+        ui.label(format!("{:#?}", self));
+        false
+    }
+}
+
+impl Inspectable for PlanningState {
     type Attributes = ();
 
     fn ui(
