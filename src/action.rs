@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bevy::prelude::{Commands, Component, Entity, EventWriter, Query};
+use bevy::prelude::{Changed, Commands, Component, Entity, EventWriter, ParamSet, Query};
 
 use crate::{
     actor::Actor, common::MarkerComponent, condition::Condition, planning::RequestPlanEvent,
@@ -97,14 +97,24 @@ impl BuildAction for ActionBuilder {
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn action_system(
     mut actors: Query<&mut Actor>,
-    mut query: Query<(&Action, &mut ActionState)>,
+    mut set: ParamSet<(
+        Query<(&Action, &mut ActionState), Changed<ActionState>>,
+        Query<&mut ActionState>,
+    )>,
     mut ev_request_plan: EventWriter<RequestPlanEvent>,
 ) {
+    let mut changed_action_states_query = set.p0();
+
+    if changed_action_states_query.iter().count() == 0 {
+        return;
+    }
+
     let mut completed = vec![];
 
-    for (action, mut action_state) in query.iter_mut() {
+    for (action, mut action_state) in changed_action_states_query.iter_mut() {
         match *action_state {
             ActionState::Complete => {
                 *action_state = ActionState::Idle;
@@ -119,11 +129,15 @@ pub fn action_system(
         };
     }
 
+    let mut all_action_states_query = set.p1();
+
     for (actor_entity, postconditions) in completed {
         let mut actor = actors.get_mut(actor_entity).unwrap();
 
         if let Some(next_action_entity) = actor.complete_action(postconditions) {
-            let (_, mut next_action_state) = query.get_mut(*next_action_entity).unwrap();
+            let mut next_action_state = all_action_states_query
+                .get_mut(*next_action_entity)
+                .unwrap();
             *next_action_state = ActionState::Started;
         }
     }
