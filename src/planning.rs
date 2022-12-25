@@ -72,6 +72,10 @@ pub fn create_plan_system(
             });
 
             if !all_actions_ready {
+                println!(
+                    "Not all actions are ready for {:?}, re-queueing request",
+                    actor_entity
+                );
                 // Not all the actions for this actor have finished evaluating, we must requeue the plan request for this actor to plan it later.
                 new_queue.push(*actor_entity);
                 continue;
