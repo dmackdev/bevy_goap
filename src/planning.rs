@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 use bevy::prelude::{Commands, Component, Entity, EventReader, Query};
 use pathfinding::prelude::astar;
@@ -77,7 +77,7 @@ pub fn create_plan_system(
                 continue;
             }
 
-            let actor_action_nodes = actor
+            let actor_actions = actor
                 .actions
                 .iter()
                 .filter_map(|action_entity| match action_states.get(*action_entity) {
@@ -85,33 +85,19 @@ pub fn create_plan_system(
                     Ok(ActionState::EvaluationSuccess) => {
                         let action = actions.get(*action_entity).unwrap();
 
-                        Some(Node {
-                            id: NodeId::Action(*action_entity),
-                            preconditions: action.preconditions.clone(),
-                            postconditions: action.postconditions.clone(),
-                        })
+                        Some((action, action_entity))
                     }
                     _ => None,
                 })
                 .collect::<Vec<_>>();
 
-            let start_node = Node {
-                id: NodeId::Start,
-                preconditions: GoapState::new(),
-                postconditions: actor.current_state.clone(),
-            };
-
-            let goal_node = Node {
-                id: NodeId::Goal,
-                preconditions: actor.current_goal.clone(),
-                postconditions: GoapState::new(),
-            };
+            let start_node = Node::get_initial(&actor.current_state);
 
             let (node_path, _) = astar(
-                &&start_node,
-                |node| node.successors(&actor_action_nodes),
-                |_| 1, // TODO: Need a heuristic. Alternatively, Dijkstra could be used to solely use the action's cost.
-                |node| node.postconditions_match_preconditions_of(&goal_node), // This will exclude the goal node from the path.
+                &start_node,
+                |node| node.get_successors(&actor_actions),
+                |node| node.mismatch_count(&actor.current_goal),
+                |node| node.matches(&actor.current_goal),
             )
             .unwrap_or((vec![], 0));
 
@@ -140,53 +126,65 @@ pub fn create_plan_system(
     planning_state_query.single_mut().queue = new_queue;
 }
 
-#[derive(Hash, Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum NodeId {
-    Action(Entity),
     Start,
-    Goal,
+    Action(Entity),
 }
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Node {
     id: NodeId,
-    preconditions: GoapState,
-    postconditions: GoapState,
-}
-
-impl Hash for Node {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
-}
-
-impl PartialEq for Node {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
+    current_state: GoapState,
 }
 
 impl Node {
-    fn successors<'a>(&self, nodes: &'a [Node]) -> Vec<(&'a Node, i32)> {
-        nodes
+    fn get_initial(initial_state: &GoapState) -> Node {
+        Node {
+            id: NodeId::Start,
+            current_state: initial_state.clone(),
+        }
+    }
+
+    fn get_next(prev_state: &GoapState, action: &Action, action_entity: Entity) -> Node {
+        let mut next_state = prev_state.clone();
+        next_state.extend(action.postconditions.clone());
+
+        Node {
+            id: NodeId::Action(action_entity),
+            current_state: next_state,
+        }
+    }
+
+    fn get_successors(&self, actions: &[(&Action, &Entity)]) -> Vec<(Node, i32)> {
+        actions
             .iter()
-            .filter_map(|other| {
-                if self.postconditions_match_preconditions_of(other) {
-                    Some((other, 1)) // TODO: need to add action cost here.
-                } else {
-                    None
-                }
+            .filter_map(|(action, action_entity)| {
+                self.matches(&action.preconditions).then_some((
+                    Node::get_next(&self.current_state, action, **action_entity),
+                    1, // TODO: Update with action cost
+                ))
             })
             .collect()
     }
 
-    fn postconditions_match_preconditions_of(&self, other: &Node) -> bool {
-        for (key, pre_cond) in other.preconditions.state.iter() {
-            match self.postconditions.state.get(key) {
-                Some(post_cond) if post_cond == pre_cond => continue,
-                _ => return false,
+    fn mismatch_count(&self, target: &GoapState) -> i32 {
+        let mut count = 0;
+
+        for (key, target_value) in target.state.iter() {
+            if let Some(current_value) = self.current_state.state.get(key) {
+                if current_value != target_value {
+                    count += 1;
+                }
+            } else {
+                count += 1;
             }
         }
-        true
+
+        count
+    }
+
+    fn matches(&self, target: &GoapState) -> bool {
+        self.mismatch_count(target) == 0
     }
 }

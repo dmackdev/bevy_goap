@@ -1,12 +1,27 @@
-use std::{any::TypeId, collections::HashMap};
+use std::{any::TypeId, collections::HashMap, hash::Hash};
 
 use bevy::prelude::{Commands, Component};
 
 use crate::WorldCondition;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct GoapState {
     pub(crate) state: HashMap<TypeId, bool>,
+}
+
+impl PartialEq for GoapState {
+    fn eq(&self, other: &Self) -> bool {
+        self.state == other.state
+    }
+}
+
+impl Hash for GoapState {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for (key, value) in self.state.iter() {
+            key.hash(state);
+            value.hash(state);
+        }
+    }
 }
 
 impl GoapState {
