@@ -94,9 +94,6 @@ fn get_axe_action_system(
 
                 *action_state = ActionState::Complete;
             }
-            ActionState::Complete => {
-                println!("GetAxeAction is Complete.");
-            }
             _ => {}
         };
     }
@@ -126,6 +123,9 @@ fn chop_tree_action_system(mut query: Query<(&mut ActionState, &mut ChopTreeActi
             ActionState::Evaluate => {
                 *action_state = ActionState::EvaluationSuccess;
             }
+            ActionState::PlanFailure => {
+                *action_state = ActionState::Idle;
+            }
             ActionState::Started => {
                 println!("Starting to chop!");
                 *action_state = ActionState::Executing;
@@ -149,6 +149,12 @@ struct CollectWoodAction;
 fn collect_wood_action_system(mut query: Query<&mut ActionState, With<CollectWoodAction>>) {
     for mut action_state in query.iter_mut() {
         match *action_state {
+            ActionState::Evaluate => {
+                *action_state = ActionState::EvaluationSuccess;
+            }
+            ActionState::PlanFailure => {
+                *action_state = ActionState::Idle;
+            }
             ActionState::Started => {
                 println!("Starting to collect wood!");
                 *action_state = ActionState::Executing;
