@@ -48,13 +48,13 @@ struct GetAxeAction {
 }
 
 fn get_axe_action_system(
-    mut query: Query<(&mut GetAxeAction, &Action, &mut ActionState)>,
+    mut query: Query<(&mut GetAxeAction, &mut Action, &mut ActionState)>,
     mut axes: Query<(Entity, &mut Axe)>,
 ) {
     let (mut unclaimed_axes, mut claimed_axes): (Vec<_>, Vec<_>) =
         axes.iter_mut().partition(|(_, axe)| axe.owner.is_none());
 
-    for (mut find_axe_action, action, mut action_state) in query.iter_mut() {
+    for (mut find_axe_action, mut action, mut action_state) in query.iter_mut() {
         match *action_state {
             ActionState::Evaluate => {
                 println!("Evaluating GetAxeAction");
@@ -64,6 +64,8 @@ fn get_axe_action_system(
                     axe.owner = Some(action.actor_entity);
                     find_axe_action.target = Some(axe_entity);
                     claimed_axes.push((axe_entity, axe));
+
+                    action.update_cost(1);
 
                     *action_state = ActionState::EvaluationSuccess;
                 } else {

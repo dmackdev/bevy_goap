@@ -166,7 +166,7 @@ impl Node {
             .filter_map(|(action, action_entity)| {
                 self.matches(&action.preconditions).then_some((
                     Node::get_next(&self.current_state, action, **action_entity),
-                    1, // TODO: Update with action cost
+                    action.cost,
                 ))
             })
             .collect()

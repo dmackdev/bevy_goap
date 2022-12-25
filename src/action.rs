@@ -40,6 +40,7 @@ pub struct Action {
     pub actor_entity: Entity,
     pub(crate) preconditions: GoapState,
     pub(crate) postconditions: GoapState,
+    pub(crate) cost: i32,
 }
 
 impl Action {
@@ -49,6 +50,10 @@ impl Action {
             preconditions: GoapState::new(),
             postconditions: GoapState::new(),
         }
+    }
+
+    pub fn update_cost(&mut self, new_cost: u32) {
+        self.cost = new_cost as i32;
     }
 }
 
@@ -91,6 +96,7 @@ impl BuildAction for ActionBuilder {
                 actor_entity,
                 preconditions: self.preconditions.clone(),
                 postconditions: self.postconditions.clone(),
+                cost: 1,
             })
             .insert(ActionState::Idle)
             .id();
