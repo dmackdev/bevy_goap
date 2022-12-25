@@ -4,7 +4,7 @@ use bevy::prelude::{Changed, Commands, Component, Entity, EventWriter, ParamSet,
 
 use crate::{
     actor::Actor, common::MarkerComponent, condition::Condition, planning::RequestPlanEvent,
-    state::GoapState, WorldCondition,
+    state::GoapState,
 };
 
 #[derive(Component, Debug)]
@@ -39,7 +39,6 @@ pub enum ActionState {
 pub struct Action {
     pub actor_entity: Entity,
     pub(crate) preconditions: GoapState,
-    pub(crate) world_preconditions: GoapState,
     pub(crate) postconditions: GoapState,
 }
 
@@ -48,7 +47,6 @@ impl Action {
         ActionBuilder {
             marker_component: Arc::new(marker_component),
             preconditions: GoapState::new(),
-            world_preconditions: GoapState::new(),
             postconditions: GoapState::new(),
         }
     }
@@ -58,7 +56,6 @@ impl Action {
 pub struct ActionBuilder {
     marker_component: Arc<dyn MarkerComponent>,
     preconditions: GoapState,
-    world_preconditions: GoapState,
     postconditions: GoapState,
 }
 
@@ -69,14 +66,6 @@ impl ActionBuilder {
         value: bool,
     ) -> ActionBuilder {
         self.preconditions.insert::<T>(value);
-        self
-    }
-
-    pub fn with_world_precondition<T: WorldCondition + 'static>(
-        mut self,
-        value: bool,
-    ) -> ActionBuilder {
-        self.world_preconditions.insert::<T>(value);
         self
     }
 
@@ -100,7 +89,6 @@ impl BuildAction for ActionBuilder {
             .spawn_empty()
             .insert(Action {
                 actor_entity,
-                world_preconditions: self.world_preconditions.clone(),
                 preconditions: self.preconditions.clone(),
                 postconditions: self.postconditions.clone(),
             })
