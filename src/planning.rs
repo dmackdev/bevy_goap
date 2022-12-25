@@ -116,12 +116,19 @@ pub fn create_plan_system(
                 println!("Plan created for {:?}.", actor_entity);
                 let mut action_state = action_states.get_mut(*action_entity).unwrap();
                 *action_state = ActionState::Started;
+
+                for action_entity in actor.actions.iter() {
+                    if !actor.current_path.contains(action_entity) {
+                        let mut action_state = action_states.get_mut(*action_entity).unwrap();
+                        *action_state = ActionState::NotInPlan;
+                    }
+                }
             } else {
                 println!("No plan available for {:?}.", actor_entity);
 
                 for action_entity in actor.actions.iter() {
                     let mut action_state = action_states.get_mut(*action_entity).unwrap();
-                    *action_state = ActionState::PlanFailure;
+                    *action_state = ActionState::NotInPlan;
                 }
             }
         }

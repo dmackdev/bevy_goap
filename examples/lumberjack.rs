@@ -74,11 +74,12 @@ fn get_axe_action_system(
                     *action_state = ActionState::EvaluationFailure;
                 }
             }
-            ActionState::PlanFailure => {
+            ActionState::NotInPlan => {
                 if let Some(axe_entity) = find_axe_action.target {
                     if let Some((_, claimed_axe)) =
                         claimed_axes.iter_mut().find(|(e, _)| *e == axe_entity)
                     {
+                        println!("Unclaiming an axe!");
                         claimed_axe.owner = None;
                     }
                 }
@@ -125,7 +126,7 @@ fn chop_tree_action_system(mut query: Query<(&mut ActionState, &mut ChopTreeActi
             ActionState::Evaluate => {
                 *action_state = ActionState::EvaluationSuccess;
             }
-            ActionState::PlanFailure => {
+            ActionState::NotInPlan => {
                 *action_state = ActionState::Idle;
             }
             ActionState::Started => {
@@ -154,7 +155,7 @@ fn collect_wood_action_system(mut query: Query<&mut ActionState, With<CollectWoo
             ActionState::Evaluate => {
                 *action_state = ActionState::EvaluationSuccess;
             }
-            ActionState::PlanFailure => {
+            ActionState::NotInPlan => {
                 *action_state = ActionState::Idle;
             }
             ActionState::Started => {

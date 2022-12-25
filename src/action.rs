@@ -24,8 +24,8 @@ pub enum ActionState {
     EvaluationSuccess,
     /// The `Action` has been evaluated and is deemed to be **not** viable as a candidate in the next plan. It will not be considered in the next plan.
     EvaluationFailure,
-    /// The `Action` had a successful evaluation and was being considered for a plan, however the planner could not produce a plan. Use this state to perform any cleanup from operations that you might have performed during the `ActionState::Evaluate` phase, and transition back to `ActionState::Idle` when complete.
-    PlanFailure,
+    /// The `Action` had a successful evaluation and was being considered for a plan, however either the planner did not include it in the resulting plan, or the planner could not produce a plan at all. Use this state to perform any cleanup from operations that you might have performed during the `ActionState::Evaluate` phase, and transition back to `ActionState::Idle` when complete.
+    NotInPlan,
     /// Use this state to perform initialisation operations required for the execution of the `Action`, e.g. update components on the `Actor`'s entity to move it to a target.
     Started,
     /// Use this state to check whether the `Action` has completed, e.g. check whether the `Actor` has reached a target.
