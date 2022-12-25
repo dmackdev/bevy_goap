@@ -15,7 +15,7 @@ fn main() {
 }
 
 fn create_lumberjack(mut commands: Commands) {
-    let get_axe_action = Action::build(GetAxeAction)
+    let get_axe_action = Action::build(GetAxeAction::default())
         .with_precondition(ActorHasAxeCondition, false)
         .with_postcondition(ActorHasAxeCondition, true);
 
@@ -42,26 +42,28 @@ fn create_lumberjack(mut commands: Commands) {
 #[derive(Component, Clone)]
 struct Lumberjack;
 
-#[derive(Component, Clone)]
-struct GetAxeAction;
+#[derive(Default, Component, Clone)]
+struct GetAxeAction {
+    target: Option<Entity>,
+}
 
 fn get_axe_action_system(
-    mut query: Query<(&Action, &mut ActionState), With<GetAxeAction>>,
-    mut axes: Query<&mut Axe>,
+    mut query: Query<(&mut GetAxeAction, &Action, &mut ActionState)>,
+    mut axes: Query<(Entity, &mut Axe)>,
 ) {
-    let mut unclaimed_axes = axes
-        .iter_mut()
-        .filter(|axe| axe.owner.is_none())
-        .collect::<Vec<_>>();
+    let (mut unclaimed_axes, mut claimed_axes): (Vec<_>, Vec<_>) =
+        axes.iter_mut().partition(|(_, axe)| axe.owner.is_none());
 
-    for (action, mut action_state) in query.iter_mut() {
+    for (mut find_axe_action, action, mut action_state) in query.iter_mut() {
         match *action_state {
             ActionState::Evaluate => {
                 println!("Evaluating GetAxeAction");
-                if let Some(mut axe) = unclaimed_axes.pop() {
+                if let Some((axe_entity, mut axe)) = unclaimed_axes.pop() {
                     println!("Claimed an axe!");
 
                     axe.owner = Some(action.actor_entity);
+                    find_axe_action.target = Some(axe_entity);
+                    claimed_axes.push((axe_entity, axe));
 
                     *action_state = ActionState::EvaluationSuccess;
                 } else {
@@ -69,6 +71,18 @@ fn get_axe_action_system(
 
                     *action_state = ActionState::EvaluationFailure;
                 }
+            }
+            ActionState::PlanFailure => {
+                if let Some(axe_entity) = find_axe_action.target {
+                    if let Some((_, claimed_axe)) =
+                        claimed_axes.iter_mut().find(|(e, _)| *e == axe_entity)
+                    {
+                        claimed_axe.owner = None;
+                    }
+                }
+                find_axe_action.target = None;
+
+                *action_state = ActionState::Idle;
             }
             ActionState::Started => {
                 println!("Starting GetAxeAction");
