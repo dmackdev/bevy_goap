@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, sync::Arc};
 
-use bevy::prelude::{Added, Commands, Component, Entity, EventWriter, Query};
+use bevy::prelude::{Added, Changed, Commands, Component, Entity, EventWriter, Query};
 
 use crate::{
     action::BuildAction, common::MarkerComponent, state::GoapState, Condition, RequestPlanEvent,
@@ -24,11 +24,25 @@ impl Actor {
         }
     }
 
+    pub fn update_current_state<T: Condition + 'static>(&mut self, _condition: T, value: bool) {
+        self.current_state.insert::<T>(value);
+    }
+
     pub(crate) fn complete_action(&mut self, postconditions: GoapState) -> Option<&Entity> {
         self.current_state.extend(postconditions);
         self.current_path.pop_front();
         self.current_path.front()
     }
+}
+
+#[derive(Component, Debug)]
+pub enum ActorState {
+    RequiresPlan,
+    AwaitingPlan,
+    NoPlanAvailable,
+    ExecutingPlan,
+    CompletedPlan,
+    FailedDuringPlan,
 }
 
 #[derive(Component)]
@@ -74,6 +88,7 @@ impl ActorBuilder {
                 current_state: self.initial_state.clone(),
                 current_goal: self.initial_goal.clone(),
             })
+            .insert(ActorState::RequiresPlan)
             .remove::<ActorBuilder>();
 
         self.marker_component.insert(commands, actor_entity);
@@ -83,13 +98,22 @@ impl ActorBuilder {
 pub fn build_new_actor_system(
     mut commands: Commands,
     query: Query<(Entity, &ActorBuilder), Added<ActorBuilder>>,
-    mut ev_request_plan: EventWriter<RequestPlanEvent>,
 ) {
     for (entity, actor_builder) in query.iter() {
         let actor_entity = commands.entity(entity).id();
 
         actor_builder.build(&mut commands, actor_entity);
+    }
+}
 
-        ev_request_plan.send(RequestPlanEvent(actor_entity));
+pub fn actor_state_system(
+    mut query: Query<(Entity, &mut ActorState), Changed<ActorState>>,
+    mut ev_request_plan: EventWriter<RequestPlanEvent>,
+) {
+    for (actor_entity, mut actor_state) in query.iter_mut() {
+        if let ActorState::RequiresPlan = *actor_state {
+            *actor_state = ActorState::AwaitingPlan;
+            ev_request_plan.send(RequestPlanEvent(actor_entity));
+        };
     }
 }

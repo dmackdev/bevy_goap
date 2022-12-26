@@ -4,6 +4,7 @@ use std::hash::Hash;
 use bevy::prelude::{Commands, Component, Entity, EventReader, Query};
 use pathfinding::prelude::astar;
 
+use crate::actor::ActorState;
 use crate::state::GoapState;
 use crate::{
     action::{Action, ActionState},
@@ -56,6 +57,7 @@ pub fn create_plan_system(
     mut planning_state_query: Query<&mut PlanningState>,
     mut actors: Query<&mut Actor>,
     mut action_states: Query<&mut ActionState>,
+    mut actor_states: Query<&mut ActorState>,
     actions: Query<&Action>,
 ) {
     let mut new_queue: Vec<Entity> = vec![];
@@ -114,8 +116,12 @@ pub fn create_plan_system(
 
             if let Some(action_entity) = actor.current_path.front() {
                 println!("Plan created for {:?}.", actor_entity);
+
                 let mut action_state = action_states.get_mut(*action_entity).unwrap();
                 *action_state = ActionState::Started;
+
+                let mut actor_state = actor_states.get_mut(*actor_entity).unwrap();
+                *actor_state = ActorState::ExecutingPlan;
 
                 for action_entity in actor.actions.iter() {
                     if !actor.current_path.contains(action_entity) {
@@ -130,6 +136,9 @@ pub fn create_plan_system(
                     let mut action_state = action_states.get_mut(*action_entity).unwrap();
                     *action_state = ActionState::NotInPlan;
                 }
+
+                let mut actor_state = actor_states.get_mut(*actor_entity).unwrap();
+                *actor_state = ActorState::NoPlanAvailable;
             }
         }
     }

@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_goap::{Action, ActionState, Actor, Condition, GoapPlugin};
+use bevy_goap::{Action, ActionState, Actor, ActorState, Condition, GoapPlugin};
 
 fn main() {
     App::new()
@@ -11,6 +11,7 @@ fn main() {
         .add_system(get_axe_action_system)
         .add_system(chop_tree_action_system)
         .add_system(collect_wood_action_system)
+        .add_system_to_stage(CoreStage::Last, lumberjack_actor_system)
         .run();
 }
 
@@ -41,6 +42,20 @@ fn create_lumberjack(mut commands: Commands) {
 
 #[derive(Component, Clone)]
 struct Lumberjack;
+
+#[allow(clippy::type_complexity)]
+fn lumberjack_actor_system(
+    mut query: Query<(&mut ActorState, &mut Actor), (With<Lumberjack>, Changed<ActorState>)>,
+) {
+    for (mut actor_state, mut actor) in query.iter_mut() {
+        println!("Found changed actor_state to {:?}", actor_state);
+
+        if let ActorState::CompletedPlan = *actor_state {
+            actor.update_current_state(ActorHasWoodCondition, false);
+            *actor_state = ActorState::RequiresPlan;
+        };
+    }
+}
 
 #[derive(Default, Component, Clone)]
 struct GetAxeAction {
@@ -138,6 +153,7 @@ fn chop_tree_action_system(mut query: Query<(&mut ActionState, &mut ChopTreeActi
                 println!("Chopped tree {} times!", chop_tree_action.current_chops);
 
                 if chop_tree_action.current_chops >= chop_tree_action.max_chops {
+                    chop_tree_action.current_chops = 0;
                     *action_state = ActionState::Complete;
                 }
             }

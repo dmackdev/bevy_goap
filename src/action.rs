@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
-use bevy::prelude::{Changed, Commands, Component, Entity, EventWriter, ParamSet, Query};
+use bevy::prelude::{Changed, Commands, Component, Entity, ParamSet, Query};
 
 use crate::{
-    actor::Actor, common::MarkerComponent, condition::Condition, planning::RequestPlanEvent,
+    actor::{Actor, ActorState},
+    common::MarkerComponent,
+    condition::Condition,
     state::GoapState,
 };
 
@@ -110,11 +112,11 @@ impl BuildAction for ActionBuilder {
 #[allow(clippy::type_complexity)]
 pub fn action_system(
     mut actors: Query<&mut Actor>,
+    mut actor_states: Query<&mut ActorState>,
     mut set: ParamSet<(
         Query<(&Action, &mut ActionState), Changed<ActionState>>,
         Query<&mut ActionState>,
     )>,
-    mut ev_request_plan: EventWriter<RequestPlanEvent>,
 ) {
     let mut changed_action_states_query = set.p0();
 
@@ -133,7 +135,9 @@ pub fn action_system(
             }
             ActionState::Failure => {
                 *action_state = ActionState::Idle;
-                ev_request_plan.send(RequestPlanEvent(action.actor_entity));
+
+                let mut actor_state = actor_states.get_mut(action.actor_entity).unwrap();
+                *actor_state = ActorState::FailedDuringPlan;
             }
             _ => (),
         };
@@ -149,6 +153,10 @@ pub fn action_system(
                 .get_mut(*next_action_entity)
                 .unwrap();
             *next_action_state = ActionState::Started;
+        } else {
+            // The actor completed an action and there is no next one, so they completed their current plan.
+            let mut actor_state = actor_states.get_mut(actor_entity).unwrap();
+            *actor_state = ActorState::CompletedPlan;
         }
     }
 }

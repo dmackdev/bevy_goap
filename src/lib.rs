@@ -1,5 +1,5 @@
 use action::action_system;
-use actor::build_new_actor_system;
+use actor::{actor_state_system, build_new_actor_system};
 use bevy::prelude::{CoreStage, IntoSystemDescriptor, Plugin, SystemSet};
 
 use inspector::GoapInspectorPlugin;
@@ -16,7 +16,7 @@ mod planning;
 mod state;
 
 pub use action::{Action, ActionState};
-pub use actor::Actor;
+pub use actor::{Actor, ActorState};
 pub use condition::Condition;
 
 pub struct GoapPlugin;
@@ -28,6 +28,7 @@ impl Plugin for GoapPlugin {
             .add_startup_system(create_planning_state)
             .add_system(build_new_actor_system)
             .add_system(action_system)
+            .add_system(actor_state_system.after(action_system))
             .add_system_set_to_stage(
                 CoreStage::Last,
                 SystemSet::new()
