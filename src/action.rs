@@ -33,6 +33,8 @@ pub enum ActionState {
     ///
     /// Transition back to `ActionState::Idle` when complete, even if no cleanup was necessary.
     NotInPlan(bool),
+    /// The `Action` is in an `Actor`'s current plan, but it has not started yet.
+    WaitingToStart,
     /// Use this state to perform initialisation operations required for the execution of the `Action`, e.g. update components on the `Actor`'s entity to move it to a target.
     Started,
     /// Use this state to check whether the `Action` has completed, e.g. check whether the `Actor` has reached a target.

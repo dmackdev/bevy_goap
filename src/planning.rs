@@ -135,21 +135,23 @@ pub fn create_plan_system(
 
             actor.current_path = VecDeque::from_iter(action_path);
 
-            if let Some(action_entity) = actor.current_path.front() {
+            if let Some(first_action_entity) = actor.current_path.front() {
                 println!("Plan created for {:?}.", actor_entity);
 
-                let mut action_state = action_states.get_mut(*action_entity).unwrap();
-                *action_state = ActionState::Started;
-
-                let mut actor_state = actor_states.get_mut(*actor_entity).unwrap();
-                *actor_state = ActorState::ExecutingPlan;
-
                 for action_entity in actor.actions.iter() {
-                    if !actor.current_path.contains(action_entity) {
-                        let mut action_state = action_states.get_mut(*action_entity).unwrap();
+                    let mut action_state = action_states.get_mut(*action_entity).unwrap();
+
+                    if action_entity == first_action_entity {
+                        *action_state = ActionState::Started;
+                    } else if actor.current_path.contains(action_entity) {
+                        *action_state = ActionState::WaitingToStart;
+                    } else {
                         action_state.mark_not_in_plan();
                     }
                 }
+
+                let mut actor_state = actor_states.get_mut(*actor_entity).unwrap();
+                *actor_state = ActorState::ExecutingPlan;
             } else {
                 println!("No plan available for {:?}.", actor_entity);
 
