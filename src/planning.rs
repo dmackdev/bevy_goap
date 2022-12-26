@@ -44,17 +44,17 @@ pub fn request_plan_event_handler_system(
                 // If the action's postconditions already satisfy the actor's current state, we do not need to evaluate the action or consider it for the plan.
                 let mut action_postconditions_already_satisfied = true;
                 for (postcondition_key, postcondition_value) in action.postconditions.state.iter() {
-                    if let Some(current_state_value) =
-                        actor.current_state.state.get(postcondition_key)
-                    {
-                        if current_state_value != postcondition_value {
+                    match actor.current_state.state.get(postcondition_key) {
+                        Some(current_state_value) if current_state_value != postcondition_value => {
                             action_postconditions_already_satisfied = false;
                             break;
                         }
-                    } else {
-                        action_postconditions_already_satisfied = false;
-                        break;
-                    }
+                        None => {
+                            action_postconditions_already_satisfied = false;
+                            break;
+                        }
+                        _ => {}
+                    };
                 }
 
                 if action_postconditions_already_satisfied {
@@ -213,12 +213,14 @@ impl Node {
         let mut count = 0;
 
         for (key, target_value) in target.state.iter() {
-            if let Some(current_value) = self.current_state.state.get(key) {
-                if current_value != target_value {
+            match self.current_state.state.get(key) {
+                Some(current_value) if current_value != target_value => {
                     count += 1;
                 }
-            } else {
-                count += 1;
+                None => {
+                    count += 1;
+                }
+                _ => {}
             }
         }
 
