@@ -118,7 +118,7 @@ pub fn create_plan_system(
                 })
                 .collect::<Vec<_>>();
 
-            let start_node = Node::get_initial(&actor.current_state);
+            let start_node = PlanNode::get_initial(&actor.current_state);
 
             let (node_path, _) = astar(
                 &start_node,
@@ -129,7 +129,7 @@ pub fn create_plan_system(
             .unwrap_or((vec![], 0));
 
             let action_path = node_path.iter().filter_map(|node| match node.id {
-                NodeId::Action(e) => Some(e),
+                PlanNodeId::Action(e) => Some(e),
                 _ => None,
             });
 
@@ -170,41 +170,41 @@ pub fn create_plan_system(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum NodeId {
+enum PlanNodeId {
     Start,
     Action(Entity),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Node {
-    id: NodeId,
+struct PlanNode {
+    id: PlanNodeId,
     current_state: GoapState,
 }
 
-impl Node {
-    fn get_initial(initial_state: &GoapState) -> Node {
-        Node {
-            id: NodeId::Start,
+impl PlanNode {
+    fn get_initial(initial_state: &GoapState) -> PlanNode {
+        PlanNode {
+            id: PlanNodeId::Start,
             current_state: initial_state.clone(),
         }
     }
 
-    fn get_next(prev_state: &GoapState, action: &Action, action_entity: Entity) -> Node {
+    fn get_next(prev_state: &GoapState, action: &Action, action_entity: Entity) -> PlanNode {
         let mut next_state = prev_state.clone();
         next_state.extend(action.postconditions.clone());
 
-        Node {
-            id: NodeId::Action(action_entity),
+        PlanNode {
+            id: PlanNodeId::Action(action_entity),
             current_state: next_state,
         }
     }
 
-    fn get_successors(&self, actions: &[(&Action, &Entity)]) -> Vec<(Node, i32)> {
+    fn get_successors(&self, actions: &[(&Action, &Entity)]) -> Vec<(PlanNode, i32)> {
         actions
             .iter()
             .filter_map(|(action, action_entity)| {
                 self.matches(&action.preconditions).then_some((
-                    Node::get_next(&self.current_state, action, **action_entity),
+                    PlanNode::get_next(&self.current_state, action, **action_entity),
                     action.cost,
                 ))
             })
