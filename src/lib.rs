@@ -15,7 +15,7 @@ mod inspector;
 mod planning;
 mod state;
 
-pub use action::{Action, ActionState};
+pub use action::{Action, ActionState, EvaluationResult};
 pub use actor::{Actor, ActorState};
 pub use condition::Condition;
 

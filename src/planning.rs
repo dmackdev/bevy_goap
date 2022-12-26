@@ -4,6 +4,7 @@ use std::hash::Hash;
 use bevy::prelude::{Commands, Component, Entity, EventReader, Query};
 use pathfinding::prelude::astar;
 
+use crate::action::EvaluationResult;
 use crate::actor::ActorState;
 use crate::state::GoapState;
 use crate::{
@@ -27,6 +28,7 @@ pub fn request_plan_event_handler_system(
     mut planning_state_query: Query<&mut PlanningState>,
     actors_query: Query<&Actor>,
     mut action_states_query: Query<&mut ActionState>,
+    actions_query: Query<&Action>,
 ) {
     let mut planning_state = planning_state_query.single_mut();
 
@@ -36,9 +38,28 @@ pub fn request_plan_event_handler_system(
 
         if let Ok(actor) = actors_query.get(ev.0) {
             for action_entity in actor.actions.iter() {
-                let action_state_result = action_states_query.get_mut(*action_entity);
+                let action = actions_query.get(*action_entity).unwrap();
+                let mut action_state = action_states_query.get_mut(*action_entity).unwrap();
 
-                if let Ok(mut action_state) = action_state_result {
+                // If the action's postconditions already satisfy the actor's current state, we do not need to evaluate the action or consider it for the plan.
+                let mut action_postconditions_already_satisfied = true;
+                for (postcondition_key, postcondition_value) in action.postconditions.state.iter() {
+                    if let Some(current_state_value) =
+                        actor.current_state.state.get(postcondition_key)
+                    {
+                        if current_state_value != postcondition_value {
+                            action_postconditions_already_satisfied = false;
+                            break;
+                        }
+                    } else {
+                        action_postconditions_already_satisfied = false;
+                        break;
+                    }
+                }
+
+                if action_postconditions_already_satisfied {
+                    *action_state = ActionState::EvaluationComplete(EvaluationResult::Skipped);
+                } else {
                     // Since we have found at least one action that can be in the plan, we can queue this request.
                     should_queue = true;
                     *action_state = ActionState::Evaluate;
@@ -69,7 +90,7 @@ pub fn create_plan_system(
             let all_actions_ready = actor.actions.iter().all(|action_entity| {
                 matches!(
                     action_states.get(*action_entity),
-                    Ok(ActionState::EvaluationSuccess) | Ok(ActionState::EvaluationFailure)
+                    Ok(ActionState::EvaluationComplete(_))
                 )
             });
 
@@ -88,7 +109,7 @@ pub fn create_plan_system(
                 .iter()
                 .filter_map(|action_entity| match action_states.get(*action_entity) {
                     // Only consider actions that have a succesful evaluation.
-                    Ok(ActionState::EvaluationSuccess) => {
+                    Ok(ActionState::EvaluationComplete(EvaluationResult::Success)) => {
                         let action = actions.get(*action_entity).unwrap();
 
                         Some((action, action_entity))
@@ -126,7 +147,7 @@ pub fn create_plan_system(
                 for action_entity in actor.actions.iter() {
                     if !actor.current_path.contains(action_entity) {
                         let mut action_state = action_states.get_mut(*action_entity).unwrap();
-                        *action_state = ActionState::NotInPlan;
+                        action_state.mark_not_in_plan();
                     }
                 }
             } else {
@@ -134,7 +155,7 @@ pub fn create_plan_system(
 
                 for action_entity in actor.actions.iter() {
                     let mut action_state = action_states.get_mut(*action_entity).unwrap();
-                    *action_state = ActionState::NotInPlan;
+                    action_state.mark_not_in_plan();
                 }
 
                 let mut actor_state = actor_states.get_mut(*actor_entity).unwrap();

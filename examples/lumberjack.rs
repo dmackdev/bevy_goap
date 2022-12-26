@@ -1,12 +1,12 @@
 use bevy::prelude::*;
-use bevy_goap::{Action, ActionState, Actor, ActorState, Condition, GoapPlugin};
+use bevy_goap::{Action, ActionState, Actor, ActorState, Condition, EvaluationResult, GoapPlugin};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(GoapPlugin)
         .add_startup_system(create_lumberjack)
-        .add_startup_system(create_lumberjack)
+        // .add_startup_system(create_lumberjack)
         .add_startup_system(create_axes_system)
         .add_system(get_axe_action_system)
         .add_system(chop_tree_action_system)
@@ -82,23 +82,25 @@ fn get_axe_action_system(
 
                     action.update_cost(1);
 
-                    *action_state = ActionState::EvaluationSuccess;
+                    *action_state = ActionState::EvaluationComplete(EvaluationResult::Success);
                 } else {
                     println!("No available axe to claim!");
 
-                    *action_state = ActionState::EvaluationFailure;
+                    *action_state = ActionState::EvaluationComplete(EvaluationResult::Failure);
                 }
             }
-            ActionState::NotInPlan => {
-                if let Some(axe_entity) = find_axe_action.target {
-                    if let Some((_, claimed_axe)) =
-                        claimed_axes.iter_mut().find(|(e, _)| *e == axe_entity)
-                    {
-                        println!("Unclaiming an axe!");
-                        claimed_axe.owner = None;
+            ActionState::NotInPlan(did_evaluate) => {
+                if did_evaluate {
+                    if let Some(axe_entity) = find_axe_action.target {
+                        if let Some((_, claimed_axe)) =
+                            claimed_axes.iter_mut().find(|(e, _)| *e == axe_entity)
+                        {
+                            println!("Unclaiming an axe!");
+                            claimed_axe.owner = None;
+                        }
                     }
+                    find_axe_action.target = None;
                 }
-                find_axe_action.target = None;
 
                 *action_state = ActionState::Idle;
             }
@@ -139,9 +141,9 @@ fn chop_tree_action_system(mut query: Query<(&mut ActionState, &mut ChopTreeActi
     for (mut action_state, mut chop_tree_action) in query.iter_mut() {
         match *action_state {
             ActionState::Evaluate => {
-                *action_state = ActionState::EvaluationSuccess;
+                *action_state = ActionState::EvaluationComplete(EvaluationResult::Success);
             }
-            ActionState::NotInPlan => {
+            ActionState::NotInPlan(_) => {
                 *action_state = ActionState::Idle;
             }
             ActionState::Started => {
@@ -169,9 +171,9 @@ fn collect_wood_action_system(mut query: Query<&mut ActionState, With<CollectWoo
     for mut action_state in query.iter_mut() {
         match *action_state {
             ActionState::Evaluate => {
-                *action_state = ActionState::EvaluationSuccess;
+                *action_state = ActionState::EvaluationComplete(EvaluationResult::Success);
             }
-            ActionState::NotInPlan => {
+            ActionState::NotInPlan(_) => {
                 *action_state = ActionState::Idle;
             }
             ActionState::Started => {
