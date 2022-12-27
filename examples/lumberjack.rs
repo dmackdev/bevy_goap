@@ -1,5 +1,7 @@
 use bevy::prelude::*;
-use bevy_goap::{Action, ActionState, Actor, ActorState, Condition, EvaluationResult, GoapPlugin};
+use bevy_goap::{
+    Action, ActionState, Actor, ActorState, Condition, EvaluationResult, GoapPlugin, GoapStage,
+};
 
 fn main() {
     let mut app = App::new();
@@ -7,12 +9,18 @@ fn main() {
     app.add_plugins(DefaultPlugins)
         .add_plugin(GoapPlugin)
         .add_startup_system(create_lumberjack)
-        // .add_startup_system(create_lumberjack)
         .add_startup_system(create_axes_system)
-        .add_system(get_axe_action_system)
-        .add_system(chop_tree_action_system)
-        .add_system(collect_wood_action_system)
-        .add_system_to_stage(CoreStage::Last, lumberjack_actor_system);
+        .add_system_set_to_stage(
+            GoapStage::Actions,
+            SystemSet::new()
+                .with_system(get_axe_action_system)
+                .with_system(chop_tree_action_system)
+                .with_system(collect_wood_action_system),
+        )
+        .add_system_set_to_stage(
+            GoapStage::Actors,
+            SystemSet::new().with_system(lumberjack_actor_system),
+        );
 
     #[cfg(feature = "inspector")]
     app.add_plugin(bevy_goap::inspector::GoapInspectorPlugin);
