@@ -2,7 +2,6 @@ use action::action_system;
 use actor::{actor_state_system, build_new_actor_system};
 use bevy::prelude::{CoreStage, IntoSystemDescriptor, Plugin, SystemSet};
 
-use inspector::GoapInspectorPlugin;
 use planning::{
     create_plan_system, create_planning_state, request_plan_event_handler_system, RequestPlanEvent,
 };
@@ -11,9 +10,11 @@ mod action;
 mod actor;
 mod common;
 mod condition;
-mod inspector;
 mod planning;
 mod state;
+
+#[cfg(feature = "inspector")]
+pub mod inspector;
 
 pub use action::{Action, ActionState, EvaluationResult};
 pub use actor::{Actor, ActorState};
@@ -23,8 +24,7 @@ pub struct GoapPlugin;
 
 impl Plugin for GoapPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_plugin(GoapInspectorPlugin)
-            .add_event::<RequestPlanEvent>()
+        app.add_event::<RequestPlanEvent>()
             .add_startup_system(create_planning_state)
             .add_system(build_new_actor_system)
             .add_system(action_system)

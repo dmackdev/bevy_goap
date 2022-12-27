@@ -2,8 +2,9 @@ use bevy::prelude::*;
 use bevy_goap::{Action, ActionState, Actor, ActorState, Condition, EvaluationResult, GoapPlugin};
 
 fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
+    let mut app = App::new();
+
+    app.add_plugins(DefaultPlugins)
         .add_plugin(GoapPlugin)
         .add_startup_system(create_lumberjack)
         // .add_startup_system(create_lumberjack)
@@ -11,8 +12,12 @@ fn main() {
         .add_system(get_axe_action_system)
         .add_system(chop_tree_action_system)
         .add_system(collect_wood_action_system)
-        .add_system_to_stage(CoreStage::Last, lumberjack_actor_system)
-        .run();
+        .add_system_to_stage(CoreStage::Last, lumberjack_actor_system);
+
+    #[cfg(feature = "inspector")]
+    app.add_plugin(bevy_goap::inspector::GoapInspectorPlugin);
+
+    app.run();
 }
 
 fn create_lumberjack(mut commands: Commands) {
