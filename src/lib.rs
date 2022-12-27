@@ -1,4 +1,4 @@
-use action::action_system;
+use action::action_state_system;
 use actor::{actor_state_system, build_new_actor_system};
 use bevy::prelude::{CoreStage, IntoSystemDescriptor, Plugin, StageLabel, SystemSet, SystemStage};
 
@@ -43,7 +43,10 @@ impl Plugin for GoapPlugin {
             InternalGoapStage::ActionStateTransition,
             SystemStage::parallel(),
         );
-        app.add_system_to_stage(InternalGoapStage::ActionStateTransition, action_system);
+        app.add_system_to_stage(
+            InternalGoapStage::ActionStateTransition,
+            action_state_system,
+        );
 
         // User Actor systems should be added to this stage, which can react to an Actor's completed or failed plan.
         app.add_stage_after(

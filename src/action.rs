@@ -135,7 +135,7 @@ impl BuildAction for ActionBuilder {
 }
 
 #[allow(clippy::type_complexity)]
-pub fn action_system(
+pub fn action_state_system(
     mut actors: Query<&mut Actor>,
     mut actor_states: Query<&mut ActorState>,
     mut set: ParamSet<(
