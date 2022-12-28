@@ -9,7 +9,7 @@ use crate::{
     state::GoapState,
 };
 
-#[derive(Component, Debug)]
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ActionState {
     /// An `Action` in this state is currently not executing, nor being considered for a plan.
     Idle,
@@ -57,7 +57,7 @@ impl ActionState {
     }
 }
 
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EvaluationResult {
     /// The `Action` has been evaluated and is deemed to be viable as a candidate in the next plan, with an updated cost.
     Success,

@@ -35,7 +35,7 @@ impl Actor {
     }
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, PartialEq, Eq, Debug, Clone)]
 pub enum ActorState {
     RequiresPlan,
     AwaitingPlan,
