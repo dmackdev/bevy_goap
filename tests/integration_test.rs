@@ -4,6 +4,7 @@ use bevy::prelude::{App, Component, Entity, Query, SystemSet, With};
 use bevy_goap::{
     Action, ActionState, Actor, ActorState, Condition, EvaluationResult, GoapPlugin, GoapStage,
 };
+use rstest::rstest;
 
 #[derive(Component, Clone)]
 struct Lumberjack;
@@ -46,18 +47,7 @@ fn create_lumberjack(app: &mut App) -> Entity {
     app.world.spawn(lumberjack).id()
 }
 
-#[test]
-fn integration() {
-    let mut app = App::new();
-    app.add_plugin(GoapPlugin);
-    app.add_system_set_to_stage(
-        GoapStage::Actions,
-        SystemSet::new()
-            .with_system(action_system::<GetAxeAction>)
-            .with_system(action_system::<ChopTreeAction>)
-            .with_system(action_system::<CollectWoodAction>),
-    );
-
+fn cheapest_path_fixture() -> ActorTestCase {
     let mut actor_test_case = ActorTestCase::new(ActorState::CompletedPlan);
 
     actor_test_case.insert_action_test_case::<GetAxeAction>(ActionTestCase {
@@ -82,10 +72,23 @@ fn integration() {
     actor_test_case.expect_next_action_in_path_to_be::<GetAxeAction>();
     actor_test_case.expect_next_action_in_path_to_be::<ChopTreeAction>();
 
-    app.world.spawn(actor_test_case.clone());
+    actor_test_case
+}
 
-    // No longer need mutatations.
-    let actor_test_case = actor_test_case;
+#[rstest]
+#[case(cheapest_path_fixture())]
+fn integration_test(#[case] actor_test_case: ActorTestCase) {
+    let mut app = App::new();
+    app.add_plugin(GoapPlugin);
+    app.add_system_set_to_stage(
+        GoapStage::Actions,
+        SystemSet::new()
+            .with_system(action_system::<GetAxeAction>)
+            .with_system(action_system::<ChopTreeAction>)
+            .with_system(action_system::<CollectWoodAction>),
+    );
+
+    app.world.spawn(actor_test_case.clone());
 
     create_lumberjack(&mut app);
 
@@ -93,10 +96,7 @@ fn integration() {
     app.update();
 
     assert_eq!(app.world.query::<&Actor>().iter(&app.world).len(), 1);
-    assert_eq!(
-        app.world.query::<&Action>().iter(&app.world).len(),
-        actor_test_case.action_test_cases.len()
-    );
+    assert_eq!(app.world.query::<&Action>().iter(&app.world).len(), 3);
 
     // Actor should be waiting for a plan.
     assert_eq!(
@@ -261,7 +261,7 @@ fn finish_action(
 ) {
     *action_state = test_case
         .execution_result
-        .expect("An action was not expected to have finished executing!");
+        .expect("An action was not expected to have been executing!");
 
     actor_test_case.current_action_idx += 1;
 }
