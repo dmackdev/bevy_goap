@@ -36,9 +36,14 @@ pub enum ActionState {
     /// The `Action` is in an `Actor`'s current plan, but it has not started yet.
     WaitingToStart,
     /// Use this state to perform initialisation operations required for the execution of the `Action`, e.g. update components on the `Actor`'s entity to move it to a target.
+    ///
+    /// Transition to `ActionState::Executing` when complete.
     Started,
     /// Use this state to check whether the `Action` has completed, e.g. check whether the `Actor` has reached a target.
+    /// - If the `Action` completes successfully, transition to `ActionState::Complete`.
+    /// - If the `Action` completes unsuccessfully, transition to `ActionState::Failure`.
     Executing,
+    /// The `Action` completed successfully.
     Complete,
     /// The `Action` failed during execution and the `Actor` requires a replan.
     Failure,
