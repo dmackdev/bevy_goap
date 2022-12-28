@@ -47,7 +47,33 @@ fn create_lumberjack(app: &mut App) -> Entity {
     app.world.spawn(lumberjack).id()
 }
 
-fn cheapest_path_fixture() -> ActorTestCase {
+fn single_action_cheapest_path_fixture() -> ActorTestCase {
+    let mut actor_test_case = ActorTestCase::new(ActorState::CompletedPlan);
+
+    actor_test_case.insert_action_test_case::<GetAxeAction>(ActionTestCase {
+        new_cost: 1,
+        evaluation_result: EvaluationResult::Success,
+        execution_result: None, // This action should not execute, so unwrapping this field will fail the test if it were to finish executing.
+    });
+
+    actor_test_case.insert_action_test_case::<ChopTreeAction>(ActionTestCase {
+        new_cost: 1,
+        evaluation_result: EvaluationResult::Success,
+        execution_result: None, // This action should not execute, so unwrapping this field will fail the test if it were to finish executing.
+    });
+
+    actor_test_case.insert_action_test_case::<CollectWoodAction>(ActionTestCase {
+        new_cost: 1,
+        evaluation_result: EvaluationResult::Success,
+        execution_result: Some(ActionState::Complete),
+    });
+
+    actor_test_case.expect_next_action_in_path_to_be::<CollectWoodAction>();
+
+    actor_test_case
+}
+
+fn two_actions_cheapest_path_fixture() -> ActorTestCase {
     let mut actor_test_case = ActorTestCase::new(ActorState::CompletedPlan);
 
     actor_test_case.insert_action_test_case::<GetAxeAction>(ActionTestCase {
@@ -76,7 +102,8 @@ fn cheapest_path_fixture() -> ActorTestCase {
 }
 
 #[rstest]
-#[case(cheapest_path_fixture())]
+#[case(single_action_cheapest_path_fixture())]
+#[case(two_actions_cheapest_path_fixture())]
 fn integration_test(#[case] actor_test_case: ActorTestCase) {
     let mut app = App::new();
     app.add_plugin(GoapPlugin);
