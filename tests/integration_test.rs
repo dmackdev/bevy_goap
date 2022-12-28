@@ -14,6 +14,9 @@ struct GetAxeAction;
 #[derive(Component, Clone)]
 struct ChopTreeAction;
 
+#[derive(Component, Clone)]
+struct CollectWoodAction;
+
 struct HasAxeCondition;
 impl Condition for HasAxeCondition {}
 
@@ -29,12 +32,16 @@ fn create_lumberjack(app: &mut App) -> Entity {
         .with_precondition(HasAxeCondition, true)
         .with_postcondition(HasWoodCondition, true);
 
+    let collect_wood_action =
+        Action::build(CollectWoodAction).with_postcondition(HasWoodCondition, true);
+
     let lumberjack = Actor::build(Lumberjack)
         .with_initial_condition(HasAxeCondition, false)
         .with_initial_condition(HasWoodCondition, false)
         .with_goal(HasWoodCondition, true)
         .with_action(get_axe_action)
-        .with_action(chop_tree_action);
+        .with_action(chop_tree_action)
+        .with_action(collect_wood_action);
 
     app.world.spawn(lumberjack).id()
 }
@@ -47,7 +54,8 @@ fn integration() {
         GoapStage::Actions,
         SystemSet::new()
             .with_system(action_system::<GetAxeAction>)
-            .with_system(action_system::<ChopTreeAction>),
+            .with_system(action_system::<ChopTreeAction>)
+            .with_system(action_system::<CollectWoodAction>),
     );
 
     let mut actor_test_case = ActorTestCase::new(ActorState::CompletedPlan);
@@ -64,6 +72,13 @@ fn integration() {
         execution_result: ActionState::Complete,
     });
 
+    // For this action test case we set a higher cost than the two above actions combined (which together achieve the goal), so we do not expect it to be in the path.
+    actor_test_case.insert_action_test_case::<CollectWoodAction>(ActionTestCase {
+        new_cost: 3,
+        evaluation_result: EvaluationResult::Success,
+        execution_result: ActionState::Complete, // Uneeded
+    });
+
     actor_test_case.expect_next_action_in_path_to_be::<GetAxeAction>();
     actor_test_case.expect_next_action_in_path_to_be::<ChopTreeAction>();
 
@@ -78,7 +93,10 @@ fn integration() {
     app.update();
 
     assert_eq!(app.world.query::<&Actor>().iter(&app.world).len(), 1);
-    assert_eq!(app.world.query::<&Action>().iter(&app.world).len(), 2);
+    assert_eq!(
+        app.world.query::<&Action>().iter(&app.world).len(),
+        actor_test_case.action_test_cases.len()
+    );
 
     // Actor should be waiting for a plan.
     assert_eq!(
