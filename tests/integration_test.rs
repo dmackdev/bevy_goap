@@ -63,20 +63,20 @@ fn integration() {
     actor_test_case.insert_action_test_case::<GetAxeAction>(ActionTestCase {
         new_cost: 1,
         evaluation_result: EvaluationResult::Success,
-        execution_result: ActionState::Complete,
+        execution_result: Some(ActionState::Complete),
     });
 
     actor_test_case.insert_action_test_case::<ChopTreeAction>(ActionTestCase {
         new_cost: 1,
         evaluation_result: EvaluationResult::Success,
-        execution_result: ActionState::Complete,
+        execution_result: Some(ActionState::Complete),
     });
 
     // For this action test case we set a higher cost than the two above actions combined (which together achieve the goal), so we do not expect it to be in the path.
     actor_test_case.insert_action_test_case::<CollectWoodAction>(ActionTestCase {
         new_cost: 3,
         evaluation_result: EvaluationResult::Success,
-        execution_result: ActionState::Complete, // Uneeded
+        execution_result: None, // This action should not execute, so unwrapping this field will fail the test if it were to finish executing.
     });
 
     actor_test_case.expect_next_action_in_path_to_be::<GetAxeAction>();
@@ -202,7 +202,7 @@ fn action_system<T: Component>(
 struct ActionTestCase {
     new_cost: u32,
     evaluation_result: EvaluationResult,
-    execution_result: ActionState,
+    execution_result: Option<ActionState>,
 }
 
 #[derive(Component, Clone)]
@@ -245,7 +245,7 @@ fn assert_correct_idx_in_path<T: Component>(actor_test_case: &mut ActorTestCase)
         *actor_test_case
             .expected_path
             .get(actor_test_case.current_action_idx)
-            .expect("An Action was completed, but it was not expected to have executed!"),
+            .expect("An action was not expected to have been starting or executing!"),
         TypeId::of::<T>()
     );
 }
@@ -259,6 +259,9 @@ fn finish_action(
     test_case: &ActionTestCase,
     action_state: &mut ActionState,
 ) {
+    *action_state = test_case
+        .execution_result
+        .expect("An action was not expected to have finished executing!");
+
     actor_test_case.current_action_idx += 1;
-    *action_state = test_case.execution_result;
 }
