@@ -8,8 +8,10 @@ fn main() {
 
     app.add_plugins(DefaultPlugins)
         .add_plugin(GoapPlugin)
+        .add_startup_system(setup)
         .add_startup_system(create_lumberjack)
         .add_startup_system(create_axes_system)
+        .add_startup_system(create_trees_system)
         .add_system_set_to_stage(
             GoapStage::Actions,
             SystemSet::new()
@@ -20,7 +22,8 @@ fn main() {
         .add_system_set_to_stage(
             GoapStage::Actors,
             SystemSet::new().with_system(lumberjack_actor_system),
-        );
+        )
+        .add_system(navigation_system);
 
     #[cfg(feature = "inspector")]
     app.add_plugin(bevy_goap::inspector::GoapInspectorPlugin);
@@ -28,7 +31,28 @@ fn main() {
     app.run();
 }
 
-fn create_lumberjack(mut commands: Commands) {
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    commands.spawn(Camera3dBundle {
+        transform: Transform::from_xyz(0., 1000., 1000.).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    });
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 1024. })),
+        material: materials.add(Color::GREEN.into()),
+        ..Default::default()
+    });
+}
+
+fn create_lumberjack(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     let get_axe_action = Action::build(GetAxeAction::default())
         .with_precondition(ActorHasAxeCondition, false)
         .with_postcondition(ActorHasAxeCondition, true);
@@ -50,7 +74,11 @@ fn create_lumberjack(mut commands: Commands) {
         // .with_action(_collect_wood_action) // Try uncommenting this action to observe a different action sequence the lumberjack performs!
         .with_action(chop_tree_action);
 
-    commands.spawn_empty().insert(lumberjack);
+    commands.spawn_empty().insert(lumberjack).insert(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Cube { size: 32. })),
+        material: materials.add(Color::RED.into()),
+        ..Default::default()
+    });
 }
 
 #[derive(Component, Clone)]
@@ -76,56 +104,54 @@ struct GetAxeAction {
 }
 
 fn get_axe_action_system(
+    mut commands: Commands,
     mut query: Query<(&mut GetAxeAction, &mut Action, &mut ActionState)>,
-    mut axes: Query<(Entity, &mut Axe)>,
+    actor_transforms_query: Query<&Transform, With<Lumberjack>>,
+    axes: Query<(Entity, &Transform), With<Axe>>,
+    navigations: Query<&Navigation>,
 ) {
-    let (mut unclaimed_axes, mut claimed_axes): (Vec<_>, Vec<_>) =
-        axes.iter_mut().partition(|(_, axe)| axe.owner.is_none());
-
-    for (mut find_axe_action, mut action, mut action_state) in query.iter_mut() {
+    for (mut get_axe, mut action, mut action_state) in query.iter_mut() {
         match *action_state {
             ActionState::Evaluate => {
                 println!("Evaluating GetAxeAction");
-                if let Some((axe_entity, mut axe)) = unclaimed_axes.pop() {
-                    println!("Claimed an axe!");
+                let actor_pos = actor_transforms_query
+                    .get(action.actor_entity)
+                    .unwrap()
+                    .translation;
 
-                    axe.owner = Some(action.actor_entity);
-                    find_axe_action.target = Some(axe_entity);
-                    claimed_axes.push((axe_entity, axe));
+                let closest_axe = axes.iter().min_by_key(|(_, axe_transform)| {
+                    (axe_transform.translation - actor_pos).length() as i32
+                });
 
-                    action.update_cost(1);
-
+                if let Some((axe_entity, axe_transform)) = closest_axe {
+                    action.update_cost((axe_transform.translation - actor_pos).length() as u32);
+                    get_axe.target = Some(axe_entity);
                     *action_state = ActionState::EvaluationComplete(EvaluationResult::Success);
                 } else {
-                    println!("No available axe to claim!");
-
                     *action_state = ActionState::EvaluationComplete(EvaluationResult::Failure);
                 }
             }
-            ActionState::NotInPlan(did_evaluate) => {
-                if did_evaluate {
-                    if let Some(axe_entity) = find_axe_action.target {
-                        if let Some((_, claimed_axe)) =
-                            claimed_axes.iter_mut().find(|(e, _)| *e == axe_entity)
-                        {
-                            println!("Unclaiming an axe!");
-                            claimed_axe.owner = None;
-                        }
-                    }
-                    find_axe_action.target = None;
-                }
-
+            ActionState::NotInPlan(_) => {
                 *action_state = ActionState::Idle;
             }
             ActionState::Started => {
                 println!("Starting GetAxeAction");
+
+                commands.entity(action.actor_entity).insert(Navigation {
+                    navigator: action.actor_entity,
+                    target: get_axe.target.unwrap(),
+                    speed: 50.,
+                    is_done: false,
+                });
 
                 *action_state = ActionState::Executing;
             }
             ActionState::Executing => {
                 println!("Getting axe!");
 
-                *action_state = ActionState::Complete;
+                if navigations.get(action.actor_entity).unwrap().is_done {
+                    *action_state = ActionState::Complete;
+                }
             }
             _ => {}
         };
@@ -137,6 +163,7 @@ impl Condition for ActorHasAxeCondition {}
 
 #[derive(Component, Clone)]
 struct ChopTreeAction {
+    tree_entity: Option<Entity>,
     max_chops: u8,
     current_chops: u8,
 }
@@ -144,32 +171,71 @@ struct ChopTreeAction {
 impl ChopTreeAction {
     fn new(max_chops: u8) -> Self {
         Self {
+            tree_entity: None,
             max_chops,
             current_chops: 0,
         }
     }
 }
 
-fn chop_tree_action_system(mut query: Query<(&mut ActionState, &mut ChopTreeAction)>) {
-    for (mut action_state, mut chop_tree_action) in query.iter_mut() {
+fn chop_tree_action_system(
+    mut commands: Commands,
+    mut query: Query<(&mut ActionState, &mut ChopTreeAction, &mut Action)>,
+    actor_transforms_query: Query<&Transform, With<Lumberjack>>,
+    trees: Query<(Entity, &Transform), With<Tree>>,
+    navigations: Query<&Navigation>,
+) {
+    for (mut action_state, mut chop_tree_action, mut action) in query.iter_mut() {
         match *action_state {
             ActionState::Evaluate => {
-                *action_state = ActionState::EvaluationComplete(EvaluationResult::Success);
+                let actor_pos = actor_transforms_query
+                    .get(action.actor_entity)
+                    .unwrap()
+                    .translation;
+
+                let closest_tree = trees.iter().min_by_key(|(_, tree_transform)| {
+                    (tree_transform.translation - actor_pos).length() as i32
+                });
+
+                if let Some((tree_entity, tree_transform)) = closest_tree {
+                    chop_tree_action.tree_entity = Some(tree_entity);
+
+                    action.update_cost((tree_transform.translation - actor_pos).length() as u32);
+
+                    *action_state = ActionState::EvaluationComplete(EvaluationResult::Success);
+                } else {
+                    *action_state = ActionState::EvaluationComplete(EvaluationResult::Failure);
+                }
             }
             ActionState::NotInPlan(_) => {
                 *action_state = ActionState::Idle;
             }
             ActionState::Started => {
-                println!("Starting to chop!");
+                commands.entity(action.actor_entity).insert(Navigation {
+                    navigator: action.actor_entity,
+                    target: chop_tree_action.tree_entity.unwrap(),
+                    speed: 50.,
+                    is_done: false,
+                });
+
                 *action_state = ActionState::Executing;
             }
             ActionState::Executing => {
-                chop_tree_action.current_chops += 1;
-                println!("Chopped tree {} times!", chop_tree_action.current_chops);
+                if navigations.get(action.actor_entity).unwrap().is_done {
+                    chop_tree_action.current_chops += 1;
+                    println!("Chopped tree {} times!", chop_tree_action.current_chops);
 
-                if chop_tree_action.current_chops >= chop_tree_action.max_chops {
-                    chop_tree_action.current_chops = 0;
-                    *action_state = ActionState::Complete;
+                    if chop_tree_action.current_chops >= chop_tree_action.max_chops {
+                        commands
+                            .entity(chop_tree_action.tree_entity.unwrap())
+                            .despawn_recursive();
+
+                        chop_tree_action.current_chops = 0;
+
+                        *action_state = ActionState::Complete;
+                    }
+                } else {
+                    println!("Moving to tree!");
                 }
             }
             _ => {}
@@ -206,10 +272,75 @@ struct ActorHasWoodCondition;
 impl Condition for ActorHasWoodCondition {}
 
 #[derive(Component)]
-struct Axe {
-    owner: Option<Entity>,
+struct Axe;
+
+fn create_axes_system(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    commands.spawn_empty().insert(Axe).insert(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Cube { size: 16. })),
+        material: materials.add(Color::BLUE.into()),
+        transform: Transform::from_xyz(100., 0., 100.),
+        ..Default::default()
+    });
 }
 
-fn create_axes_system(mut commands: Commands) {
-    commands.spawn_empty().insert(Axe { owner: None });
+#[derive(Component)]
+struct Tree;
+
+fn create_trees_system(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let tree_transforms = vec![
+        Transform::from_xyz(-100., 0., 100.),
+        Transform::from_xyz(100., 0., 200.),
+        Transform::from_xyz(-400., 0., 250.),
+        Transform::from_xyz(300., 0., 300.),
+    ];
+
+    for transform in tree_transforms {
+        commands.spawn_empty().insert(Tree).insert(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(24., 128., 24.))),
+            material: materials.add(Color::BEIGE.into()),
+            transform,
+            ..Default::default()
+        });
+    }
+}
+
+#[derive(Component)]
+struct Navigation {
+    navigator: Entity,
+    target: Entity,
+    speed: f32,
+    is_done: bool,
+}
+
+fn navigation_system(
+    mut navigation_query: Query<&mut Navigation>,
+    mut transforms_query: Query<&mut Transform>,
+    time: Res<Time>,
+) {
+    for mut nav in navigation_query.iter_mut() {
+        if nav.is_done {
+            continue;
+        }
+
+        let navigator_position = transforms_query.get(nav.navigator).unwrap().translation;
+        let target_position = transforms_query.get(nav.target).unwrap().translation;
+
+        let delta_to_target = target_position - navigator_position;
+
+        if delta_to_target.length() < 1. {
+            nav.is_done = true;
+            continue;
+        } else {
+            let movement_delta = nav.speed * time.delta_seconds() * delta_to_target.normalize();
+            transforms_query.get_mut(nav.navigator).unwrap().translation += movement_delta;
+        }
+    }
 }
