@@ -6,6 +6,7 @@ pub struct Navigation {
     pub target: Entity,
     pub speed: f32,
     pub is_done: bool,
+    pub is_err: bool,
 }
 
 pub fn navigation_system(
@@ -14,21 +15,29 @@ pub fn navigation_system(
     time: Res<Time>,
 ) {
     for mut nav in navigation_query.iter_mut() {
-        if nav.is_done {
+        if nav.is_done || nav.is_err {
             continue;
         }
 
-        let navigator_position = transforms_query.get(nav.navigator).unwrap().translation;
-        let target_position = transforms_query.get(nav.target).unwrap().translation;
+        if let (Ok(navigator_transform), Ok(target_transform)) = (
+            transforms_query.get(nav.navigator),
+            transforms_query.get(nav.target),
+        ) {
+            let navigator_position = navigator_transform.translation;
+            let target_position = target_transform.translation;
 
-        let delta_to_target = target_position - navigator_position;
+            let delta_to_target = target_position - navigator_position;
 
-        if delta_to_target.length() < 1. {
-            nav.is_done = true;
-            continue;
+            if delta_to_target.length() < 1. {
+                nav.is_done = true;
+                continue;
+            } else {
+                let movement_delta = nav.speed * time.delta_seconds() * delta_to_target.normalize();
+                transforms_query.get_mut(nav.navigator).unwrap().translation += movement_delta;
+            }
         } else {
-            let movement_delta = nav.speed * time.delta_seconds() * delta_to_target.normalize();
-            transforms_query.get_mut(nav.navigator).unwrap().translation += movement_delta;
+            nav.is_err = true;
+            continue;
         }
     }
 }

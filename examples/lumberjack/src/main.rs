@@ -42,12 +42,12 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0., 1000., 1000.).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_xyz(0., 100., 100.).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
 
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 1024. })),
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 100. })),
         material: materials.add(Color::GREEN.into()),
         ..Default::default()
     });
@@ -79,11 +79,22 @@ fn create_lumberjack(
         // .with_action(_collect_wood_action) // Try uncommenting this action to observe a different action sequence the lumberjack performs!
         .with_action(chop_tree_action);
 
-    commands.spawn_empty().insert(lumberjack).insert(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 32. })),
-        material: materials.add(Color::RED.into()),
-        ..Default::default()
-    });
+    let lumberjack_transforms = vec![
+        Transform::from_xyz(0., 0., -5.),
+        Transform::from_xyz(10., 0., 5.),
+    ];
+
+    for transform in lumberjack_transforms {
+        commands
+            .spawn_empty()
+            .insert(lumberjack.clone())
+            .insert(PbrBundle {
+                mesh: meshes.add(Mesh::from(shape::Cube { size: 2. })),
+                material: materials.add(Color::RED.into()),
+                transform,
+                ..Default::default()
+            });
+    }
 }
 
 #[derive(Component, Clone)]
@@ -96,7 +107,7 @@ fn lumberjack_actor_system(
     for (mut actor_state, mut actor) in query.iter_mut() {
         println!("Found changed actor_state to {:?}", actor_state);
 
-        if let ActorState::CompletedPlan = *actor_state {
+        if let ActorState::CompletedPlan | ActorState::FailedDuringPlan = *actor_state {
             actor.update_current_state(ActorHasWoodCondition, false);
             *actor_state = ActorState::RequiresPlan;
         };
@@ -148,8 +159,9 @@ fn get_axe_action_system(
                     commands.entity(action.actor_entity).insert(Navigation {
                         navigator: action.actor_entity,
                         target: axe_entity,
-                        speed: 50.,
+                        speed: 15.,
                         is_done: false,
+                        is_err: false,
                     });
 
                     *action_state = ActionState::Executing;
@@ -160,7 +172,15 @@ fn get_axe_action_system(
             ActionState::Executing => {
                 println!("Getting axe!");
 
-                if navigations.get(action.actor_entity).unwrap().is_done {
+                let nav = navigations.get(action.actor_entity).unwrap();
+
+                if nav.is_err {
+                    *action_state = ActionState::Failure;
+                } else if nav.is_done {
+                    commands
+                        .entity(get_axe_action.axe_entity.unwrap())
+                        .despawn_recursive();
+
                     *action_state = ActionState::Complete;
                 }
             }
@@ -201,7 +221,7 @@ fn chop_tree_action_system(
             ActionState::Evaluate => {
                 println!("Evaluating ChopTreeAction");
 
-                // Is there an axe available?
+                // Is there a tree available?
                 if trees.iter().count() > 0 {
                     *action_state = ActionState::EvaluationComplete(EvaluationResult::Success);
                 } else {
@@ -229,8 +249,9 @@ fn chop_tree_action_system(
                     commands.entity(action.actor_entity).insert(Navigation {
                         navigator: action.actor_entity,
                         target: tree_entity,
-                        speed: 50.,
+                        speed: 15.,
                         is_done: false,
+                        is_err: false,
                     });
 
                     *action_state = ActionState::Executing;
@@ -239,7 +260,11 @@ fn chop_tree_action_system(
                 }
             }
             ActionState::Executing => {
-                if navigations.get(action.actor_entity).unwrap().is_done {
+                let nav = navigations.get(action.actor_entity).unwrap();
+
+                if nav.is_err {
+                    *action_state = ActionState::Failure;
+                } else if nav.is_done {
                     chop_tree_action.current_chops += 1;
                     println!("Chopped tree {} times!", chop_tree_action.current_chops);
 

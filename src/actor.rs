@@ -45,7 +45,7 @@ pub enum ActorState {
     FailedDuringPlan,
 }
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct ActorBuilder {
     marker_component: Arc<dyn MarkerComponent>,
     actions: Vec<Arc<dyn BuildAction>>,
