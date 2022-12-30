@@ -100,32 +100,23 @@ fn lumberjack_actor_system(
 
 #[derive(Default, Component, Clone)]
 struct GetAxeAction {
-    target: Option<Entity>,
+    axe_entity: Option<Entity>,
 }
 
 fn get_axe_action_system(
     mut commands: Commands,
-    mut query: Query<(&mut GetAxeAction, &mut Action, &mut ActionState)>,
+    mut query: Query<(&mut GetAxeAction, &Action, &mut ActionState), With<GetAxeAction>>,
     actor_transforms_query: Query<&Transform, With<Lumberjack>>,
     axes: Query<(Entity, &Transform), With<Axe>>,
     navigations: Query<&Navigation>,
 ) {
-    for (mut get_axe, mut action, mut action_state) in query.iter_mut() {
+    for (mut get_axe_action, action, mut action_state) in query.iter_mut() {
         match *action_state {
             ActionState::Evaluate => {
                 println!("Evaluating GetAxeAction");
-                let actor_pos = actor_transforms_query
-                    .get(action.actor_entity)
-                    .unwrap()
-                    .translation;
 
-                let closest_axe = axes.iter().min_by_key(|(_, axe_transform)| {
-                    (axe_transform.translation - actor_pos).length() as i32
-                });
-
-                if let Some((axe_entity, axe_transform)) = closest_axe {
-                    action.update_cost((axe_transform.translation - actor_pos).length() as u32);
-                    get_axe.target = Some(axe_entity);
+                // Is there an axe available?
+                if axes.iter().count() > 0 {
                     *action_state = ActionState::EvaluationComplete(EvaluationResult::Success);
                 } else {
                     *action_state = ActionState::EvaluationComplete(EvaluationResult::Failure);
@@ -137,14 +128,29 @@ fn get_axe_action_system(
             ActionState::Started => {
                 println!("Starting GetAxeAction");
 
-                commands.entity(action.actor_entity).insert(Navigation {
-                    navigator: action.actor_entity,
-                    target: get_axe.target.unwrap(),
-                    speed: 50.,
-                    is_done: false,
+                let actor_pos = actor_transforms_query
+                    .get(action.actor_entity)
+                    .unwrap()
+                    .translation;
+
+                let closest_axe = axes.iter().min_by_key(|(_, axe_transform)| {
+                    (axe_transform.translation - actor_pos).length() as i32
                 });
 
-                *action_state = ActionState::Executing;
+                if let Some((axe_entity, _)) = closest_axe {
+                    get_axe_action.axe_entity = Some(axe_entity);
+
+                    commands.entity(action.actor_entity).insert(Navigation {
+                        navigator: action.actor_entity,
+                        target: axe_entity,
+                        speed: 50.,
+                        is_done: false,
+                    });
+
+                    *action_state = ActionState::Executing;
+                } else {
+                    *action_state = ActionState::Failure;
+                }
             }
             ActionState::Executing => {
                 println!("Getting axe!");
@@ -180,28 +186,18 @@ impl ChopTreeAction {
 
 fn chop_tree_action_system(
     mut commands: Commands,
-    mut query: Query<(&mut ActionState, &mut ChopTreeAction, &mut Action)>,
+    mut query: Query<(&mut ActionState, &mut ChopTreeAction, &Action)>,
     actor_transforms_query: Query<&Transform, With<Lumberjack>>,
     trees: Query<(Entity, &Transform), With<Tree>>,
     navigations: Query<&Navigation>,
 ) {
-    for (mut action_state, mut chop_tree_action, mut action) in query.iter_mut() {
+    for (mut action_state, mut chop_tree_action, action) in query.iter_mut() {
         match *action_state {
             ActionState::Evaluate => {
-                let actor_pos = actor_transforms_query
-                    .get(action.actor_entity)
-                    .unwrap()
-                    .translation;
+                println!("Evaluating ChopTreeAction");
 
-                let closest_tree = trees.iter().min_by_key(|(_, tree_transform)| {
-                    (tree_transform.translation - actor_pos).length() as i32
-                });
-
-                if let Some((tree_entity, tree_transform)) = closest_tree {
-                    chop_tree_action.tree_entity = Some(tree_entity);
-
-                    action.update_cost((tree_transform.translation - actor_pos).length() as u32);
-
+                // Is there an axe available?
+                if trees.iter().count() > 0 {
                     *action_state = ActionState::EvaluationComplete(EvaluationResult::Success);
                 } else {
                     *action_state = ActionState::EvaluationComplete(EvaluationResult::Failure);
@@ -211,14 +207,31 @@ fn chop_tree_action_system(
                 *action_state = ActionState::Idle;
             }
             ActionState::Started => {
-                commands.entity(action.actor_entity).insert(Navigation {
-                    navigator: action.actor_entity,
-                    target: chop_tree_action.tree_entity.unwrap(),
-                    speed: 50.,
-                    is_done: false,
+                println!("Starting ChopTreeAction");
+
+                let actor_pos = actor_transforms_query
+                    .get(action.actor_entity)
+                    .unwrap()
+                    .translation;
+
+                let closest_tree = trees.iter().min_by_key(|(_, tree_transform)| {
+                    (tree_transform.translation - actor_pos).length() as i32
                 });
 
-                *action_state = ActionState::Executing;
+                if let Some((tree_entity, _)) = closest_tree {
+                    chop_tree_action.tree_entity = Some(tree_entity);
+
+                    commands.entity(action.actor_entity).insert(Navigation {
+                        navigator: action.actor_entity,
+                        target: tree_entity,
+                        speed: 50.,
+                        is_done: false,
+                    });
+
+                    *action_state = ActionState::Executing;
+                } else {
+                    *action_state = ActionState::Failure;
+                }
             }
             ActionState::Executing => {
                 if navigations.get(action.actor_entity).unwrap().is_done {
