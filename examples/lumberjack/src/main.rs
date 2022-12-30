@@ -2,6 +2,11 @@ use bevy::prelude::*;
 use bevy_goap::{
     Action, ActionState, Actor, ActorState, Condition, EvaluationResult, GoapPlugin, GoapStage,
 };
+use environment::*;
+use navigation::{navigation_system, Navigation};
+
+mod environment;
+mod navigation;
 
 fn main() {
     let mut app = App::new();
@@ -283,77 +288,3 @@ fn collect_wood_action_system(mut query: Query<&mut ActionState, With<CollectWoo
 
 struct ActorHasWoodCondition;
 impl Condition for ActorHasWoodCondition {}
-
-#[derive(Component)]
-struct Axe;
-
-fn create_axes_system(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    commands.spawn_empty().insert(Axe).insert(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 16. })),
-        material: materials.add(Color::BLUE.into()),
-        transform: Transform::from_xyz(100., 0., 100.),
-        ..Default::default()
-    });
-}
-
-#[derive(Component)]
-struct Tree;
-
-fn create_trees_system(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let tree_transforms = vec![
-        Transform::from_xyz(-100., 0., 100.),
-        Transform::from_xyz(100., 0., 200.),
-        Transform::from_xyz(-400., 0., 250.),
-        Transform::from_xyz(300., 0., 300.),
-    ];
-
-    for transform in tree_transforms {
-        commands.spawn_empty().insert(Tree).insert(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Box::new(24., 128., 24.))),
-            material: materials.add(Color::BEIGE.into()),
-            transform,
-            ..Default::default()
-        });
-    }
-}
-
-#[derive(Component)]
-struct Navigation {
-    navigator: Entity,
-    target: Entity,
-    speed: f32,
-    is_done: bool,
-}
-
-fn navigation_system(
-    mut navigation_query: Query<&mut Navigation>,
-    mut transforms_query: Query<&mut Transform>,
-    time: Res<Time>,
-) {
-    for mut nav in navigation_query.iter_mut() {
-        if nav.is_done {
-            continue;
-        }
-
-        let navigator_position = transforms_query.get(nav.navigator).unwrap().translation;
-        let target_position = transforms_query.get(nav.target).unwrap().translation;
-
-        let delta_to_target = target_position - navigator_position;
-
-        if delta_to_target.length() < 1. {
-            nav.is_done = true;
-            continue;
-        } else {
-            let movement_delta = nav.speed * time.delta_seconds() * delta_to_target.normalize();
-            transforms_query.get_mut(nav.navigator).unwrap().translation += movement_delta;
-        }
-    }
-}
