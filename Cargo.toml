@@ -16,3 +16,7 @@ rstest = "0.16.0"
 
 [features]
 inspector = ["dep:bevy-inspector-egui"]
+
+[[example]]
+name = "lumberjack"
+path = "examples/lumberjack/src/main.rs"
